@@ -69,7 +69,7 @@ export class AIService {
       })
 
       // Save both user message and assistant reply
-      const userMessage = await this.database.createMessage({
+      await this.database.createMessage({
         user_id: this.userId,
         role: 'user',
         content: text,

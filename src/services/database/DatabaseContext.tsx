@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { DatabaseInterface, DatabaseConfig, DatabaseMode } from './types'
 import { createDatabaseService } from './databaseService'
 

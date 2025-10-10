@@ -90,8 +90,8 @@ export class LocalDatabaseService implements DatabaseInterface {
     return await localDB.messages
       .where('user_id')
       .equals(this.config.userId)
-      .orderBy('inserted_at')
-      .toArray()
+      .reverse()
+      .sortBy('inserted_at')
   }
 
   async getMessage(id: string): Promise<Message | null> {
@@ -162,8 +162,9 @@ export class LocalDatabaseService implements DatabaseInterface {
 
   async getActiveAPIKey(provider: string): Promise<APIKey | null> {
     return await localDB.apiKeys
-      .where(['user_id', 'provider', 'is_active'])
-      .equals([this.config.userId, provider, true])
+      .where('user_id')
+      .equals(this.config.userId)
+      .and(key => key.provider === provider && key.is_active === true)
       .first() || null
   }
 

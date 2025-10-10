@@ -1,5 +1,4 @@
-import React, { useState } from 'react'
-import { useDatabase } from '../services/database/DatabaseContext'
+import { useState } from 'react'
 import { SyncConflict } from '../services/database/types'
 
 interface ConflictResolverProps {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import HotkeyOverlay from './components/HotkeyOverlay'
 import { DatabaseProvider } from './services/database/DatabaseContext'
 import { DatabaseModeSelector } from './components/DatabaseModeSelector'
@@ -37,6 +37,22 @@ function App() {
           <p style={{ fontSize: '18px', marginBottom: '40px', color: '#9ca3af' }}>
             Your cross-device personal assistant with dual database support
           </p>
+          
+          <div style={{ 
+            marginBottom: '20px', 
+            padding: '15px', 
+            background: '#374151', 
+            borderRadius: '8px',
+            fontSize: '14px'
+          }}>
+            <strong>Current Model:</strong> {selectedModelConfig.modelId} ({selectedModelConfig.provider})
+            {selectedModelConfig.temperature && (
+              <span> • Temperature: {selectedModelConfig.temperature}</span>
+            )}
+            {selectedModelConfig.maxTokens && (
+              <span> • Max Tokens: {selectedModelConfig.maxTokens}</span>
+            )}
+          </div>
           
           <div style={{ 
             maxWidth: '600px', 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useDatabase } from '../services/database/DatabaseContext'
 import { DatabaseMode } from '../services/database/types'
 import { ConflictResolver } from './ConflictResolver'

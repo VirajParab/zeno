@@ -234,7 +234,7 @@ export class CloudDatabaseService implements DatabaseInterface {
     return []
   }
 
-  async resolveConflict(conflictId: string, resolution: 'local' | 'cloud' | 'merge'): Promise<void> {
+  async resolveConflict(_conflictId: string, _resolution: 'local' | 'cloud' | 'merge'): Promise<void> {
     // Cloud database doesn't have conflicts
   }
 }

@@ -6,14 +6,20 @@ import { createClient } from '@supabase/supabase-js';
 const app = express();
 const port = 3001;
 
+// Validate environment variables
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('Missing required environment variables: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY');
+  process.exit(1);
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 
 // Supabase client
 const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 // OpenAI client
@@ -57,7 +63,7 @@ app.post('/api/chat', async (req, res) => {
     // Call OpenAI
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      messages: messages as any,
+      messages: messages,
       max_tokens: 400,
       temperature: 0.7
     });

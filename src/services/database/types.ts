@@ -31,7 +31,7 @@ export interface Message {
 export interface APIKey {
   id: string
   user_id: string
-  provider: string
+  provider: 'openai' | 'gemini'
   key: string
   is_active: boolean
   created_at: string

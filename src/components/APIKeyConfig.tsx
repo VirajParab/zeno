@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useDatabase } from '../services/database/DatabaseContext'
 import { AIService } from '../services/ai/aiService'
 import { AIProvider, AIModel, APIKey, AVAILABLE_MODELS } from '../services/ai/types'
