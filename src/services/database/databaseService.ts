@@ -13,7 +13,11 @@ export class SyncDatabaseService implements DatabaseInterface {
 
   async initialize(): Promise<void> {
     await this.localService.initialize()
-    await this.cloudService.initialize()
+    try {
+      await this.cloudService.initialize()
+    } catch (error) {
+      console.warn('Cloud service initialization failed, continuing with local-only mode:', error)
+    }
   }
 
   async close(): Promise<void> {
@@ -142,7 +146,7 @@ export class SyncDatabaseService implements DatabaseInterface {
     return await this.localService.getAPIKey(id)
   }
 
-  async getActiveAPIKey(provider: string): Promise<APIKey | null> {
+  async getActiveAPIKey(provider: 'openai' | 'gemini'): Promise<APIKey | null> {
     return await this.localService.getActiveAPIKey(provider)
   }
 

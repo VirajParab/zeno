@@ -1,13 +1,33 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+let supabaseInstance: SupabaseClient | null = null
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
+export const getSupabaseClient = (): SupabaseClient => {
+  if (!supabaseInstance) {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+    
+    // Only create client if we have real credentials
+    if (supabaseUrl && supabaseAnonKey && 
+        supabaseUrl !== 'https://dummy.supabase.co' && 
+        supabaseAnonKey !== 'dummy-key') {
+      supabaseInstance = createClient(supabaseUrl, supabaseAnonKey)
+    } else {
+      // Create a dummy client that won't make network requests
+      supabaseInstance = createClient('https://dummy.supabase.co', 'dummy-key', {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false
+        }
+      })
+    }
+  }
+  return supabaseInstance
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// For backward compatibility - but this will be lazy-loaded
+export const supabase = getSupabaseClient()
 
 export type Task = {
   id: string

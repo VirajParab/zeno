@@ -16,8 +16,8 @@ const Dashboard = () => {
 
   const loadStats = async () => {
     try {
-      const tasks = await database.database.getTasks()
-      const messages = await database.database.getMessages()
+      const tasks = await database.getTasks()
+      const messages = await database.getMessages()
       
       const today = new Date().toISOString().split('T')[0]
       const tasksToday = tasks.filter((task: any) => 

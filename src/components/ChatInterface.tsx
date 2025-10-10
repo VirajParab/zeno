@@ -28,7 +28,7 @@ const ChatInterface = ({ modelConfig }: ChatInterfaceProps) => {
 
   const loadMessages = async () => {
     try {
-      const allMessages = await database.database.getMessages()
+      const allMessages = await database.getMessages()
       setMessages(allMessages)
     } catch (error) {
       console.error('Failed to load messages:', error)
@@ -50,7 +50,7 @@ const ChatInterface = ({ modelConfig }: ChatInterfaceProps) => {
     setIsLoading(true)
 
     try {
-      const aiService = new AIService(database.database, 'demo-user-123')
+      const aiService = new AIService(database, 'demo-user-123')
       const response = await aiService.chatWithAI(inputMessage, modelConfig)
       
       const assistantMessage = {

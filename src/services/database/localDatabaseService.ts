@@ -42,12 +42,18 @@ export class LocalDatabaseService implements DatabaseInterface {
       sync_status: 'pending' as const
     }
 
-    // Let Dexie auto-generate the ID
-    const id = await localDB.tasks.add(taskDataWithTimestamps as any)
+    // Let Dexie auto-generate the ID - don't include id field
+    const id = await localDB.tasks.add(taskDataWithTimestamps)
+    
+    // Fetch the created task to get the auto-generated ID
+    const createdTask = await localDB.tasks.get(id)
+    if (!createdTask) {
+      throw new Error('Failed to create task')
+    }
     
     const task: Task = {
-      id: id.toString(),
-      ...taskDataWithTimestamps
+      ...createdTask,
+      id: createdTask.id.toString()
     }
     
     // Add to sync queue if online
@@ -111,12 +117,18 @@ export class LocalDatabaseService implements DatabaseInterface {
       sync_status: 'pending' as const
     }
 
-    // Let Dexie auto-generate the ID
-    const id = await localDB.messages.add(messageDataWithTimestamp as any)
+    // Let Dexie auto-generate the ID - don't include id field
+    const id = await localDB.messages.add(messageDataWithTimestamp)
+    
+    // Fetch the created message to get the auto-generated ID
+    const createdMessage = await localDB.messages.get(id)
+    if (!createdMessage) {
+      throw new Error('Failed to create message')
+    }
     
     const message: Message = {
-      id: id.toString(),
-      ...messageDataWithTimestamp
+      ...createdMessage,
+      id: createdMessage.id.toString()
     }
     
     // Add to sync queue if online
@@ -188,12 +200,18 @@ export class LocalDatabaseService implements DatabaseInterface {
       sync_status: 'pending' as const
     }
 
-    // Let Dexie auto-generate the ID
-    const id = await localDB.apiKeys.add(apiKeyDataWithTimestamps as any)
+    // Let Dexie auto-generate the ID - don't include id field
+    const id = await localDB.apiKeys.add(apiKeyDataWithTimestamps)
+    
+    // Fetch the created API key to get the auto-generated ID
+    const createdAPIKey = await localDB.apiKeys.get(id)
+    if (!createdAPIKey) {
+      throw new Error('Failed to create API key')
+    }
     
     const apiKey: APIKey = {
-      id: id.toString(),
-      ...apiKeyDataWithTimestamps
+      ...createdAPIKey,
+      id: createdAPIKey.id.toString()
     }
     
     // Add to sync queue if online

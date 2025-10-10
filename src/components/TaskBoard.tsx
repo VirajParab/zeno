@@ -15,7 +15,7 @@ const TaskBoard = () => {
 
   const loadTasks = async () => {
     try {
-      const allTasks = await database.database.getTasks()
+      const allTasks = await database.getTasks()
       setTasks(allTasks)
     } catch (error) {
       console.error('Failed to load tasks:', error)
@@ -26,7 +26,7 @@ const TaskBoard = () => {
     if (!newTaskTitle.trim()) return
 
     try {
-      await database.database.createTask({
+      await database.createTask({
         user_id: 'demo-user-123',
         title: newTaskTitle,
         description: newTaskDescription,
@@ -45,7 +45,7 @@ const TaskBoard = () => {
 
   const updateTaskStatus = async (taskId: string, newStatus: 'todo' | 'doing' | 'done') => {
     try {
-      await database.database.updateTask(taskId, { status: newStatus })
+      await database.updateTask(taskId, { status: newStatus })
       loadTasks()
     } catch (error) {
       console.error('Failed to update task:', error)
@@ -54,7 +54,7 @@ const TaskBoard = () => {
 
   const deleteTask = async (taskId: string) => {
     try {
-      await database.database.deleteTask(taskId)
+      await database.deleteTask(taskId)
       loadTasks()
     } catch (error) {
       console.error('Failed to delete task:', error)
@@ -114,6 +114,7 @@ const TaskBoard = () => {
           <button
             onClick={() => setShowAddForm(true)}
             className="btn-primary flex items-center"
+            disabled={!database.database}
           >
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -121,6 +122,21 @@ const TaskBoard = () => {
             Add Task
           </button>
         </div>
+
+        {/* Loading State */}
+        {!database.database && (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 text-2xl mx-auto mb-4">
+              ⏳
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Loading Database
+            </h3>
+            <p className="text-gray-500">
+              Please wait while the database initializes...
+            </p>
+          </div>
+        )}
 
         {/* Add Task Modal */}
         {showAddForm && (
@@ -162,82 +178,84 @@ const TaskBoard = () => {
         )}
 
         {/* Board */}
-        <DragDropContext onDragEnd={onDragEnd}>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {columns.map((column) => (
-              <div key={column.id} className="bg-white rounded-xl shadow-sm">
-                <div className={`p-4 rounded-t-xl ${column.color}`}>
-                  <h3 className={`font-semibold ${column.textColor}`}>
-                    {column.title}
-                  </h3>
-                  <span className={`text-sm ${column.textColor} opacity-75`}>
-                    {getTasksByStatus(column.id).length} tasks
-                  </span>
-                </div>
-                
-                <Droppable droppableId={column.id}>
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className={`p-4 min-h-96 ${
-                        snapshot.isDraggingOver ? 'bg-gray-50' : ''
-                      }`}
-                    >
-                      {getTasksByStatus(column.id).map((task, index) => (
-                        <Draggable key={task.id} draggableId={task.id} index={index}>
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              className={`task-card mb-3 ${
-                                snapshot.isDragging ? 'shadow-lg rotate-2' : ''
-                              }`}
-                            >
-                              <div className="flex items-start justify-between mb-2">
-                                <h4 className="font-medium text-gray-900 flex-1">
-                                  {task.title}
-                                </h4>
-                                <button
-                                  onClick={() => deleteTask(task.id)}
-                                  className="text-gray-400 hover:text-red-500 ml-2"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
-                              </div>
-                              
-                              {task.description && (
-                                <p className="text-sm text-gray-600 mb-3">
-                                  {task.description}
-                                </p>
-                              )}
-                              
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center">
-                                  <div className={`w-2 h-2 rounded-full ${getPriorityColor(task.priority)} mr-2`}></div>
-                                  <span className="text-xs text-gray-500">
-                                    {getPriorityLabel(task.priority)}
+        {database && (
+          <DragDropContext onDragEnd={onDragEnd}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {columns.map((column) => (
+                <div key={column.id} className="bg-white rounded-xl shadow-sm">
+                  <div className={`p-4 rounded-t-xl ${column.color}`}>
+                    <h3 className={`font-semibold ${column.textColor}`}>
+                      {column.title}
+                    </h3>
+                    <span className={`text-sm ${column.textColor} opacity-75`}>
+                      {getTasksByStatus(column.id).length} tasks
+                    </span>
+                  </div>
+                  
+                  <Droppable droppableId={column.id}>
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={`p-4 min-h-96 ${
+                          snapshot.isDraggingOver ? 'bg-gray-50' : ''
+                        }`}
+                      >
+                        {getTasksByStatus(column.id).map((task, index) => (
+                          <Draggable key={task.id} draggableId={task.id} index={index}>
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                {...provided.dragHandleProps}
+                                className={`task-card mb-3 ${
+                                  snapshot.isDragging ? 'shadow-lg rotate-2' : ''
+                                }`}
+                              >
+                                <div className="flex items-start justify-between mb-2">
+                                  <h4 className="font-medium text-gray-900 flex-1">
+                                    {task.title}
+                                  </h4>
+                                  <button
+                                    onClick={() => deleteTask(task.id)}
+                                    className="text-gray-400 hover:text-red-500 ml-2"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                                
+                                {task.description && (
+                                  <p className="text-sm text-gray-600 mb-3">
+                                    {task.description}
+                                  </p>
+                                )}
+                                
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center">
+                                    <div className={`w-2 h-2 rounded-full ${getPriorityColor(task.priority)} mr-2`}></div>
+                                    <span className="text-xs text-gray-500">
+                                      {getPriorityLabel(task.priority)}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs text-gray-400">
+                                    {new Date(task.created_at).toLocaleDateString()}
                                   </span>
                                 </div>
-                                <span className="text-xs text-gray-400">
-                                  {new Date(task.created_at).toLocaleDateString()}
-                                </span>
                               </div>
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </div>
-            ))}
-          </div>
-        </DragDropContext>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </div>
+              ))}
+            </div>
+          </DragDropContext>
+        )}
       </div>
     </div>
   )

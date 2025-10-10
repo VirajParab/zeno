@@ -1,5 +1,5 @@
 import { DatabaseInterface, Task, Message, SyncConflict, DatabaseConfig, APIKey } from './types'
-import { supabase } from '../supabaseClient'
+import { getSupabaseClient } from '../supabaseClient'
 
 export class CloudDatabaseService implements DatabaseInterface {
   private config: DatabaseConfig
@@ -9,7 +9,16 @@ export class CloudDatabaseService implements DatabaseInterface {
   }
 
   async initialize(): Promise<void> {
-    // Cloud database is always initialized
+    // Check if we have real Supabase credentials
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+    
+    if (!supabaseUrl || !supabaseAnonKey || 
+        supabaseUrl === 'https://dummy.supabase.co' || 
+        supabaseAnonKey === 'dummy-key') {
+      console.warn('Cloud database mode selected but no Supabase credentials found. Using local mode instead.')
+      throw new Error('No Supabase credentials configured')
+    }
   }
 
   async close(): Promise<void> {
@@ -22,6 +31,7 @@ export class CloudDatabaseService implements DatabaseInterface {
 
   // Task operations
   async getTasks(): Promise<Task[]> {
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('tasks')
       .select('*')
@@ -33,6 +43,7 @@ export class CloudDatabaseService implements DatabaseInterface {
   }
 
   async getTask(id: string): Promise<Task | null> {
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('tasks')
       .select('*')
@@ -45,6 +56,7 @@ export class CloudDatabaseService implements DatabaseInterface {
   }
 
   async createTask(taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>): Promise<Task> {
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('tasks')
       .insert({
@@ -59,6 +71,7 @@ export class CloudDatabaseService implements DatabaseInterface {
   }
 
   async updateTask(id: string, updates: Partial<Task>): Promise<Task> {
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('tasks')
       .update({
@@ -75,6 +88,7 @@ export class CloudDatabaseService implements DatabaseInterface {
   }
 
   async deleteTask(id: string): Promise<void> {
+    const supabase = getSupabaseClient()
     const { error } = await supabase
       .from('tasks')
       .delete()
@@ -86,6 +100,7 @@ export class CloudDatabaseService implements DatabaseInterface {
 
   // Message operations
   async getMessages(): Promise<Message[]> {
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('messages')
       .select('*')
@@ -98,6 +113,7 @@ export class CloudDatabaseService implements DatabaseInterface {
   }
 
   async getMessage(id: string): Promise<Message | null> {
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('messages')
       .select('*')
@@ -110,6 +126,7 @@ export class CloudDatabaseService implements DatabaseInterface {
   }
 
   async createMessage(messageData: Omit<Message, 'id' | 'inserted_at'>): Promise<Message> {
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('messages')
       .insert({
@@ -124,6 +141,7 @@ export class CloudDatabaseService implements DatabaseInterface {
   }
 
   async updateMessage(id: string, updates: Partial<Message>): Promise<Message> {
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('messages')
       .update(updates)
@@ -137,6 +155,7 @@ export class CloudDatabaseService implements DatabaseInterface {
   }
 
   async deleteMessage(id: string): Promise<void> {
+    const supabase = getSupabaseClient()
     const { error } = await supabase
       .from('messages')
       .delete()
@@ -148,6 +167,7 @@ export class CloudDatabaseService implements DatabaseInterface {
 
   // API Key operations
   async getAPIKeys(): Promise<APIKey[]> {
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('api_keys')
       .select('*')
@@ -159,6 +179,7 @@ export class CloudDatabaseService implements DatabaseInterface {
   }
 
   async getAPIKey(id: string): Promise<APIKey | null> {
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('api_keys')
       .select('*')
@@ -171,6 +192,7 @@ export class CloudDatabaseService implements DatabaseInterface {
   }
 
   async getActiveAPIKey(provider: string): Promise<APIKey | null> {
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('api_keys')
       .select('*')
@@ -184,6 +206,7 @@ export class CloudDatabaseService implements DatabaseInterface {
   }
 
   async createAPIKey(apiKeyData: Omit<APIKey, 'id' | 'created_at' | 'updated_at'>): Promise<APIKey> {
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('api_keys')
       .insert({
@@ -199,6 +222,7 @@ export class CloudDatabaseService implements DatabaseInterface {
   }
 
   async updateAPIKey(id: string, updates: Partial<APIKey>): Promise<APIKey> {
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('api_keys')
       .update({
@@ -215,6 +239,7 @@ export class CloudDatabaseService implements DatabaseInterface {
   }
 
   async deleteAPIKey(id: string): Promise<void> {
+    const supabase = getSupabaseClient()
     const { error } = await supabase
       .from('api_keys')
       .delete()

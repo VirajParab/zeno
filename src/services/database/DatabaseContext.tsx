@@ -21,9 +21,9 @@ interface DatabaseProviderProps {
 
 export function DatabaseProvider({ children, userId }: DatabaseProviderProps) {
   const [config, setConfig] = useState<DatabaseConfig>({
-    mode: 'sync',
+    mode: 'local',
     userId,
-    syncEnabled: true
+    syncEnabled: false
   })
   const [database, setDatabase] = useState<DatabaseInterface | null>(null)
   const [isOnline, setIsOnline] = useState(navigator.onLine)

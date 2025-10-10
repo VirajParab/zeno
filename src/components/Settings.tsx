@@ -10,26 +10,79 @@ interface SettingsProps {
 
 const Settings = ({ onModelChange }: SettingsProps) => {
   const [activeSection, setActiveSection] = useState('api-keys')
+  const [isDarkMode, setIsDarkMode] = useState(false)
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+  const [autoSync, setAutoSync] = useState(true)
+  const [selectedLanguage, setSelectedLanguage] = useState('en')
 
   const sections = [
-    { id: 'api-keys', label: 'API Keys', icon: '🔑' },
-    { id: 'models', label: 'AI Models', icon: '🤖' },
-    { id: 'database', label: 'Database', icon: '💾' },
-    { id: 'appearance', label: 'Appearance', icon: '🎨' },
-    { id: 'about', label: 'About', icon: 'ℹ️' }
+    { 
+      id: 'api-keys', 
+      label: 'API Keys', 
+      icon: '🔑',
+      description: 'Manage your AI service keys',
+      color: 'bg-blue-500'
+    },
+    { 
+      id: 'models', 
+      label: 'AI Models', 
+      icon: '🤖',
+      description: 'Configure AI model preferences',
+      color: 'bg-purple-500'
+    },
+    { 
+      id: 'database', 
+      label: 'Data & Storage', 
+      icon: '💾',
+      description: 'Manage your data and storage',
+      color: 'bg-green-500'
+    },
+    { 
+      id: 'appearance', 
+      label: 'Appearance', 
+      icon: '🎨',
+      description: 'Customize look and feel',
+      color: 'bg-pink-500'
+    },
+    { 
+      id: 'notifications', 
+      label: 'Notifications', 
+      icon: '🔔',
+      description: 'Configure notification settings',
+      color: 'bg-orange-500'
+    },
+    { 
+      id: 'about', 
+      label: 'About', 
+      icon: 'ℹ️',
+      description: 'App information and support',
+      color: 'bg-gray-500'
+    }
+  ]
+
+  const languages = [
+    { code: 'en', name: 'English', flag: '🇺🇸' },
+    { code: 'es', name: 'Español', flag: '🇪🇸' },
+    { code: 'fr', name: 'Français', flag: '🇫🇷' },
+    { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
+    { code: 'zh', name: '中文', flag: '🇨🇳' },
+    { code: 'ja', name: '日本語', flag: '🇯🇵' }
   ]
 
   const renderSection = () => {
     switch (activeSection) {
       case 'api-keys':
         return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <div className="space-y-8">
+            <div className="text-center mb-8">
+              <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center text-white text-3xl mx-auto mb-4 shadow-lg">
+                🔑
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 API Key Management
               </h2>
-              <p className="text-gray-600 mb-6">
-                Configure your API keys for OpenAI and Google Gemini to enable AI features.
+              <p className="text-gray-600 max-w-md mx-auto">
+                Configure your API keys for OpenAI and Google Gemini to enable AI features and unlock the full potential of Zeno AI.
               </p>
             </div>
             <APIKeyConfig />
@@ -38,13 +91,16 @@ const Settings = ({ onModelChange }: SettingsProps) => {
       
       case 'models':
         return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <div className="space-y-8">
+            <div className="text-center mb-8">
+              <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center text-white text-3xl mx-auto mb-4 shadow-lg">
+                🤖
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 AI Model Configuration
               </h2>
-              <p className="text-gray-600 mb-6">
-                Select and configure your preferred AI models and parameters.
+              <p className="text-gray-600 max-w-md mx-auto">
+                Select and configure your preferred AI models, adjust parameters, and customize the AI experience to match your needs.
               </p>
             </div>
             <ModelSelector onModelChange={onModelChange} />
@@ -53,67 +109,124 @@ const Settings = ({ onModelChange }: SettingsProps) => {
       
       case 'database':
         return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                Database Settings
+          <div className="space-y-8">
+            <div className="text-center mb-8">
+              <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center text-white text-3xl mx-auto mb-4 shadow-lg">
+                💾
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Data & Storage
               </h2>
-              <p className="text-gray-600 mb-6">
-                Manage your data storage and synchronization preferences.
+              <p className="text-gray-600 max-w-md mx-auto">
+                Manage your data storage preferences, sync settings, and data management options.
               </p>
             </div>
             
-            <div className="card">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Storage Mode
-              </h3>
-              <div className="space-y-3">
-                <label className="flex items-center">
-                  <input type="radio" name="storage" value="local" className="mr-3" defaultChecked />
-                  <div>
-                    <div className="font-medium text-gray-900">Local Only</div>
-                    <div className="text-sm text-gray-500">Store data locally on your device</div>
+            {/* Storage Mode */}
+            <div className="card hover:shadow-lg transition-all duration-300">
+              <div className="flex items-center mb-6">
+                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-green-600 text-xl mr-4">
+                  🗄️
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">Storage Mode</h3>
+                  <p className="text-gray-600">Choose how your data is stored and synchronized</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <label className="relative cursor-pointer">
+                  <input type="radio" name="storage" value="local" className="sr-only peer" defaultChecked />
+                  <div className="p-6 border-2 border-gray-200 rounded-xl peer-checked:border-green-500 peer-checked:bg-green-50 hover:border-gray-300 transition-all duration-200">
+                    <div className="text-center">
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-gray-600 text-xl mx-auto mb-3">
+                        💻
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Local Only</h4>
+                      <p className="text-sm text-gray-600">Store data locally on your device</p>
+                    </div>
                   </div>
                 </label>
-                <label className="flex items-center">
-                  <input type="radio" name="storage" value="cloud" className="mr-3" />
-                  <div>
-                    <div className="font-medium text-gray-900">Cloud Only</div>
-                    <div className="text-sm text-gray-500">Store data in the cloud</div>
+                
+                <label className="relative cursor-pointer">
+                  <input type="radio" name="storage" value="cloud" className="sr-only peer" />
+                  <div className="p-6 border-2 border-gray-200 rounded-xl peer-checked:border-green-500 peer-checked:bg-green-50 hover:border-gray-300 transition-all duration-200">
+                    <div className="text-center">
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-gray-600 text-xl mx-auto mb-3">
+                        ☁️
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Cloud Only</h4>
+                      <p className="text-sm text-gray-600">Store data in the cloud</p>
+                    </div>
                   </div>
                 </label>
-                <label className="flex items-center">
-                  <input type="radio" name="storage" value="sync" className="mr-3" />
-                  <div>
-                    <div className="font-medium text-gray-900">Sync Mode</div>
-                    <div className="text-sm text-gray-500">Sync between local and cloud</div>
+                
+                <label className="relative cursor-pointer">
+                  <input type="radio" name="storage" value="sync" className="sr-only peer" />
+                  <div className="p-6 border-2 border-gray-200 rounded-xl peer-checked:border-green-500 peer-checked:bg-green-50 hover:border-gray-300 transition-all duration-200">
+                    <div className="text-center">
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-gray-600 text-xl mx-auto mb-3">
+                        🔄
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Sync Mode</h4>
+                      <p className="text-sm text-gray-600">Sync between local and cloud</p>
+                    </div>
                   </div>
                 </label>
               </div>
             </div>
 
-            <div className="card">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Data Management
-              </h3>
-              <div className="space-y-3">
-                <button className="btn-secondary w-full justify-start">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  Export Data
+            {/* Data Management */}
+            <div className="card hover:shadow-lg transition-all duration-300">
+              <div className="flex items-center mb-6">
+                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 text-xl mr-4">
+                  📊
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">Data Management</h3>
+                  <p className="text-gray-600">Export, import, or manage your data</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button className="flex items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors duration-200 group">
+                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center text-green-600 mr-3 group-hover:bg-green-200">
+                    📤
+                  </div>
+                  <div className="text-left">
+                    <div className="font-medium text-gray-900">Export Data</div>
+                    <div className="text-sm text-gray-500">Download your data as CSV or JSON</div>
+                  </div>
                 </button>
-                <button className="btn-secondary w-full justify-start">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                  </svg>
-                  Import Data
+                
+                <button className="flex items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors duration-200 group">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 mr-3 group-hover:bg-blue-200">
+                    📥
+                  </div>
+                  <div className="text-left">
+                    <div className="font-medium text-gray-900">Import Data</div>
+                    <div className="text-sm text-gray-500">Upload data from backup files</div>
+                  </div>
                 </button>
-                <button className="btn-danger w-full justify-start">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  Clear All Data
+                
+                <button className="flex items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors duration-200 group">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600 mr-3 group-hover:bg-purple-200">
+                    🔄
+                  </div>
+                  <div className="text-left">
+                    <div className="font-medium text-gray-900">Sync Now</div>
+                    <div className="text-sm text-gray-500">Manually trigger data sync</div>
+                  </div>
+                </button>
+                
+                <button className="flex items-center p-4 bg-gray-50 hover:bg-red-50 rounded-xl transition-colors duration-200 group">
+                  <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center text-red-600 mr-3 group-hover:bg-red-200">
+                    🗑️
+                  </div>
+                  <div className="text-left">
+                    <div className="font-medium text-gray-900">Clear All Data</div>
+                    <div className="text-sm text-gray-500">Permanently delete all data</div>
+                  </div>
                 </button>
               </div>
             </div>
@@ -122,103 +235,320 @@ const Settings = ({ onModelChange }: SettingsProps) => {
       
       case 'appearance':
         return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <div className="space-y-8">
+            <div className="text-center mb-8">
+              <div className="w-20 h-20 bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl flex items-center justify-center text-white text-3xl mx-auto mb-4 shadow-lg">
+                🎨
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 Appearance Settings
               </h2>
-              <p className="text-gray-600 mb-6">
-                Customize the look and feel of your application.
+              <p className="text-gray-600 max-w-md mx-auto">
+                Customize the look and feel of your Zeno AI experience to match your preferences.
               </p>
             </div>
             
-            <div className="card">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Theme
-              </h3>
-              <div className="grid grid-cols-3 gap-4">
-                <button className="p-4 border-2 border-primary-500 rounded-lg bg-primary-50">
-                  <div className="w-full h-8 bg-gradient-to-r from-primary-500 to-primary-600 rounded mb-2"></div>
-                  <div className="text-sm font-medium text-gray-900">Light</div>
+            {/* Theme Selection */}
+            <div className="card hover:shadow-lg transition-all duration-300">
+              <div className="flex items-center mb-6">
+                <div className="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center text-pink-600 text-xl mr-4">
+                  🌓
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">Theme</h3>
+                  <p className="text-gray-600">Choose your preferred color scheme</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button 
+                  onClick={() => setIsDarkMode(false)}
+                  className={`p-6 border-2 rounded-xl transition-all duration-200 ${
+                    !isDarkMode ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="text-center">
+                    <div className="w-16 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg mb-3 mx-auto"></div>
+                    <h4 className="font-semibold text-gray-900 mb-1">Light</h4>
+                    <p className="text-sm text-gray-600">Clean and bright interface</p>
+                  </div>
                 </button>
-                <button className="p-4 border-2 border-gray-300 rounded-lg hover:border-gray-400">
-                  <div className="w-full h-8 bg-gradient-to-r from-gray-800 to-gray-900 rounded mb-2"></div>
-                  <div className="text-sm font-medium text-gray-900">Dark</div>
+                
+                <button 
+                  onClick={() => setIsDarkMode(true)}
+                  className={`p-6 border-2 rounded-xl transition-all duration-200 ${
+                    isDarkMode ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="text-center">
+                    <div className="w-16 h-10 bg-gradient-to-r from-gray-800 to-gray-900 rounded-lg mb-3 mx-auto"></div>
+                    <h4 className="font-semibold text-gray-900 mb-1">Dark</h4>
+                    <p className="text-sm text-gray-600">Easy on the eyes</p>
+                  </div>
                 </button>
-                <button className="p-4 border-2 border-gray-300 rounded-lg hover:border-gray-400">
-                  <div className="w-full h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded mb-2"></div>
-                  <div className="text-sm font-medium text-gray-900">Auto</div>
+                
+                <button className="p-6 border-2 border-gray-200 rounded-xl hover:border-gray-300 transition-all duration-200">
+                  <div className="text-center">
+                    <div className="w-16 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg mb-3 mx-auto"></div>
+                    <h4 className="font-semibold text-gray-900 mb-1">Auto</h4>
+                    <p className="text-sm text-gray-600">Follow system preference</p>
+                  </div>
                 </button>
               </div>
             </div>
 
-            <div className="card">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Language
-              </h3>
-              <select className="input-field">
-                <option>English</option>
-                <option>Spanish</option>
-                <option>French</option>
-                <option>German</option>
-              </select>
+            {/* Language Selection */}
+            <div className="card hover:shadow-lg transition-all duration-300">
+              <div className="flex items-center mb-6">
+                <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 text-xl mr-4">
+                  🌍
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">Language</h3>
+                  <p className="text-gray-600">Select your preferred language</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {languages.map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={() => setSelectedLanguage(lang.code)}
+                    className={`p-4 border-2 rounded-xl transition-all duration-200 ${
+                      selectedLanguage === lang.code 
+                        ? 'border-primary-500 bg-primary-50' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center">
+                      <span className="text-2xl mr-3">{lang.flag}</span>
+                      <div className="text-left">
+                        <div className="font-medium text-gray-900">{lang.name}</div>
+                        <div className="text-sm text-gray-500 uppercase">{lang.code}</div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )
+      
+      case 'notifications':
+        return (
+          <div className="space-y-8">
+            <div className="text-center mb-8">
+              <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center text-white text-3xl mx-auto mb-4 shadow-lg">
+                🔔
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Notification Settings
+              </h2>
+              <p className="text-gray-600 max-w-md mx-auto">
+                Configure how and when you receive notifications from Zeno AI.
+              </p>
+            </div>
+            
+            {/* Notification Toggles */}
+            <div className="card hover:shadow-lg transition-all duration-300">
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-green-600 text-xl mr-4">
+                      🔔
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Enable Notifications</h3>
+                      <p className="text-gray-600">Receive notifications from the app</p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={notificationsEnabled}
+                      onChange={(e) => setNotificationsEnabled(e.target.checked)}
+                      className="sr-only peer" 
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                  </label>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 text-xl mr-4">
+                      🔄
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Auto Sync</h3>
+                      <p className="text-gray-600">Automatically sync data in background</p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={autoSync}
+                      onChange={(e) => setAutoSync(e.target.checked)}
+                      className="sr-only peer" 
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Notification Types */}
+            <div className="card hover:shadow-lg transition-all duration-300">
+              <h3 className="text-xl font-semibold text-gray-900 mb-6">Notification Types</h3>
+              <div className="space-y-4">
+                {[
+                  { icon: '📋', title: 'Task Reminders', description: 'Get reminded about upcoming tasks' },
+                  { icon: '🎯', title: 'Habit Streaks', description: 'Celebrate your habit achievements' },
+                  { icon: '💬', title: 'AI Responses', description: 'Notifications when AI completes tasks' },
+                  { icon: '🔄', title: 'Sync Updates', description: 'Data synchronization status updates' }
+                ].map((item, index) => (
+                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <div className="flex items-center">
+                      <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-xl mr-3">
+                        {item.icon}
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900">{item.title}</div>
+                        <div className="text-sm text-gray-600">{item.description}</div>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" className="sr-only peer" defaultChecked />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                    </label>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )
       
       case 'about':
         return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <div className="w-20 h-20 bg-gradient-primary rounded-2xl flex items-center justify-center text-white text-3xl mx-auto mb-4">
-                Z
+          <div className="space-y-8">
+            <div className="text-center mb-8">
+              <div className="w-20 h-20 bg-gradient-to-br from-gray-500 to-gray-600 rounded-2xl flex items-center justify-center text-white text-3xl mx-auto mb-4 shadow-lg">
+                ℹ️
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                Zeno AI
+                About Zeno AI
               </h2>
-              <p className="text-gray-600 mb-6">
-                Version 1.0.0
+              <p className="text-gray-600 max-w-md mx-auto">
+                Your personal productivity assistant powered by artificial intelligence.
               </p>
             </div>
             
-            <div className="card">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                About
-              </h3>
-              <p className="text-gray-600 mb-4">
-                Zeno AI is your personal productivity assistant that helps you manage tasks, 
-                track habits, and achieve your goals with the power of artificial intelligence.
-              </p>
-              <div className="space-y-2 text-sm text-gray-500">
-                <div>• Dual database system (local/cloud)</div>
-                <div>• AI-powered task management</div>
-                <div>• Habit tracking and analytics</div>
-                <div>• Cross-platform desktop app</div>
+            {/* App Info */}
+            <div className="card hover:shadow-lg transition-all duration-300">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-gradient-primary rounded-2xl flex items-center justify-center text-white text-2xl mx-auto mb-4">
+                  Z
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Zeno AI</h3>
+                <p className="text-gray-600 mb-4">Version 1.0.0</p>
+                <div className="inline-flex items-center px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
+                  ✓ Latest Version
+                </div>
+              </div>
+              
+              <div className="prose prose-sm max-w-none">
+                <p className="text-gray-600 mb-4">
+                  Zeno AI is your personal productivity assistant that helps you manage tasks, 
+                  track habits, and achieve your goals with the power of artificial intelligence.
+                </p>
+                
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="text-center p-4 bg-gray-50 rounded-lg">
+                    <div className="text-2xl font-bold text-primary-600 mb-1">100%</div>
+                    <div className="text-sm text-gray-600">Privacy Focused</div>
+                  </div>
+                  <div className="text-center p-4 bg-gray-50 rounded-lg">
+                    <div className="text-2xl font-bold text-primary-600 mb-1">24/7</div>
+                    <div className="text-sm text-gray-600">AI Assistant</div>
+                  </div>
+                  <div className="text-center p-4 bg-gray-50 rounded-lg">
+                    <div className="text-2xl font-bold text-primary-600 mb-1">∞</div>
+                    <div className="text-sm text-gray-600">Offline Ready</div>
+                  </div>
+                  <div className="text-center p-4 bg-gray-50 rounded-lg">
+                    <div className="text-2xl font-bold text-primary-600 mb-1">🚀</div>
+                    <div className="text-sm text-gray-600">Fast & Reliable</div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="card">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Support
-              </h3>
-              <div className="space-y-3">
-                <button className="btn-secondary w-full justify-start">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Help & Documentation
+            {/* Features */}
+            <div className="card hover:shadow-lg transition-all duration-300">
+              <h3 className="text-xl font-semibold text-gray-900 mb-6">Key Features</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  { icon: '🤖', title: 'AI-Powered Chat', desc: 'Intelligent conversations' },
+                  { icon: '📋', title: 'Task Management', desc: 'Organize your work' },
+                  { icon: '🎯', title: 'Habit Tracking', desc: 'Build better habits' },
+                  { icon: '💾', title: 'Dual Database', desc: 'Local & cloud storage' },
+                  { icon: '🔄', title: 'Real-time Sync', desc: 'Seamless data sync' },
+                  { icon: '🎨', title: 'Customizable UI', desc: 'Personalized experience' }
+                ].map((feature, index) => (
+                  <div key={index} className="flex items-center p-3 bg-gray-50 rounded-lg">
+                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-xl mr-3">
+                      {feature.icon}
+                    </div>
+                    <div>
+                      <div className="font-medium text-gray-900">{feature.title}</div>
+                      <div className="text-sm text-gray-600">{feature.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Support */}
+            <div className="card hover:shadow-lg transition-all duration-300">
+              <h3 className="text-xl font-semibold text-gray-900 mb-6">Support & Resources</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button className="flex items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors duration-200 group">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 mr-3 group-hover:bg-blue-200">
+                    📚
+                  </div>
+                  <div className="text-left">
+                    <div className="font-medium text-gray-900">Documentation</div>
+                    <div className="text-sm text-gray-500">User guide and tutorials</div>
+                  </div>
                 </button>
-                <button className="btn-secondary w-full justify-start">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                  Contact Support
+                
+                <button className="flex items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors duration-200 group">
+                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center text-green-600 mr-3 group-hover:bg-green-200">
+                    💬
+                  </div>
+                  <div className="text-left">
+                    <div className="font-medium text-gray-900">Contact Support</div>
+                    <div className="text-sm text-gray-500">Get help from our team</div>
+                  </div>
                 </button>
-                <button className="btn-secondary w-full justify-start">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Check for Updates
+                
+                <button className="flex items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors duration-200 group">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600 mr-3 group-hover:bg-purple-200">
+                    🔄
+                  </div>
+                  <div className="text-left">
+                    <div className="font-medium text-gray-900">Check Updates</div>
+                    <div className="text-sm text-gray-500">Look for new features</div>
+                  </div>
+                </button>
+                
+                <button className="flex items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors duration-200 group">
+                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center text-orange-600 mr-3 group-hover:bg-orange-200">
+                    ⭐
+                  </div>
+                  <div className="text-left">
+                    <div className="font-medium text-gray-900">Rate App</div>
+                    <div className="text-sm text-gray-500">Share your feedback</div>
+                  </div>
                 </button>
               </div>
             </div>
@@ -231,37 +561,54 @@ const Settings = ({ onModelChange }: SettingsProps) => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Sidebar */}
-        <div className="lg:w-64">
-          <div className="card">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Settings
-            </h2>
-            <nav className="space-y-1">
-              {sections.map((section) => (
-                <button
-                  key={section.id}
-                  onClick={() => setActiveSection(section.id)}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                    activeSection === section.id
-                      ? 'bg-primary-100 text-primary-700'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  }`}
-                >
-                  <span className="mr-2">{section.icon}</span>
-                  {section.label}
-                </button>
-              ))}
-            </nav>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Sidebar */}
+          <div className="lg:w-80">
+            <div className="card sticky top-8">
+              <div className="mb-6">
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
+                <p className="text-gray-600">Customize your Zeno AI experience</p>
+              </div>
+              
+              <nav className="space-y-2">
+                {sections.map((section) => (
+                  <button
+                    key={section.id}
+                    onClick={() => setActiveSection(section.id)}
+                    className={`w-full text-left p-4 rounded-xl transition-all duration-200 group ${
+                      activeSection === section.id
+                        ? 'bg-primary-50 border-2 border-primary-200 shadow-sm'
+                        : 'hover:bg-gray-50 border-2 border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center">
+                      <div className={`w-10 h-10 ${section.color} rounded-lg flex items-center justify-center text-white text-lg mr-3 group-hover:scale-105 transition-transform duration-200`}>
+                        {section.icon}
+                      </div>
+                      <div className="flex-1">
+                        <div className={`font-medium ${
+                          activeSection === section.id ? 'text-primary-700' : 'text-gray-900'
+                        }`}>
+                          {section.label}
+                        </div>
+                        <div className="text-sm text-gray-500 mt-1">
+                          {section.description}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </nav>
+            </div>
           </div>
-        </div>
 
-        {/* Main Content */}
-        <div className="flex-1">
-          <div className="card">
-            {renderSection()}
+          {/* Main Content */}
+          <div className="flex-1">
+            <div className="card min-h-[600px]">
+              {renderSection()}
+            </div>
           </div>
         </div>
       </div>
