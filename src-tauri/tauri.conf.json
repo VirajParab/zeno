@@ -1,7 +1,7 @@
 {
   "build": {
-    "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
     "devPath": "http://localhost:3000",
     "distDir": "../dist",
     "withGlobalTauri": false
@@ -18,9 +18,6 @@
         "open": true
       },
       "globalShortcut": {
-        "all": true
-      },
-      "event": {
         "all": true
       },
       "window": {

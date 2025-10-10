@@ -44,7 +44,10 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 ```bash
 # Install frontend dependencies
-pnpm install
+npm install
+
+# Install Tauri CLI globally
+npm install @tauri-apps/cli -g
 
 # Install backend dependencies (optional)
 cd backend && npm install && cd ..
@@ -54,10 +57,10 @@ cd backend && npm install && cd ..
 
 ```bash
 # Start frontend dev server
-pnpm dev
+npm run dev
 
 # Start Tauri desktop app (in another terminal)
-pnpm tauri:dev
+npm run tauri:dev
 
 # Start backend API server (optional, in another terminal)
 cd backend && npm run dev
@@ -67,10 +70,10 @@ cd backend && npm run dev
 
 ```bash
 # Build for production
-pnpm build
+npm run build
 
 # Build Tauri desktop app
-pnpm tauri:build
+npm run tauri:build
 
 # Deploy PWA to Vercel/Netlify
 # The dist/ folder contains the PWA-ready build
