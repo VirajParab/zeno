@@ -23,6 +23,8 @@ out/
 # Tauri specific
 src-tauri/target/
 src-tauri/Cargo.lock
+src-tauri/target/release/
+src-tauri/target/debug/
 
 # IDE and editor files
 .vscode/

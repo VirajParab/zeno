@@ -49,11 +49,30 @@ export function APIKeyConfig({ className = '' }: APIKeyConfigProps) {
     setSuccess('')
 
     try {
+      const trimmedKey = apiKey.trim()
+      
+      // Basic validation
+      if (!trimmedKey) {
+        setError('Please enter an API key.')
+        return
+      }
+
+      if (trimmedKey.length < 10) {
+        setError('API key appears to be too short. Please check your key.')
+        return
+      }
+
       const aiService = new AIService(database, 'demo-user-123')
-      const isValid = await aiService.validateAPIKey(selectedProvider, apiKey.trim())
+      const isValid = await aiService.validateAPIKey(selectedProvider, trimmedKey)
       
       if (!isValid) {
-        setError('Invalid API key. Please check your key and try again.')
+        if (selectedProvider === 'openai' && !trimmedKey.startsWith('sk-')) {
+          setError('OpenAI API key should start with "sk-". Please check your key.')
+        } else if (selectedProvider === 'gemini' && trimmedKey.length < 20) {
+          setError('Gemini API key appears to be too short. Please check your key.')
+        } else {
+          setError('Invalid API key format. Please check your key and try again.')
+        }
         return
       }
 
@@ -68,7 +87,7 @@ export function APIKeyConfig({ className = '' }: APIKeyConfigProps) {
       await database.createAPIKey({
         user_id: 'demo-user-123',
         provider: selectedProvider,
-        key: apiKey.trim(),
+        key: trimmedKey,
         is_active: true,
         usage_count: 0
       })
@@ -78,7 +97,7 @@ export function APIKeyConfig({ className = '' }: APIKeyConfigProps) {
       await loadData()
     } catch (error) {
       console.error('Failed to add API key:', error)
-      setError('Failed to add API key. Please try again.')
+      setError(`Failed to add API key: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsValidating(false)
     }

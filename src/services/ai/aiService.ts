@@ -198,18 +198,24 @@ export class AIService {
 
   async validateAPIKey(provider: AIProvider, apiKey: string): Promise<boolean> {
     try {
+      // Basic validation - check if key format looks correct
+      if (!apiKey || apiKey.trim().length < 10) {
+        return false
+      }
+
       if (provider === 'openai') {
-        const openai = new OpenAI({
-          apiKey,
-          dangerouslyAllowBrowser: true
-        })
-        await openai.models.list()
-        return true
+        // OpenAI keys typically start with 'sk-'
+        if (!apiKey.startsWith('sk-')) {
+          console.warn('OpenAI key format warning: Expected key to start with "sk-"')
+        }
+        
+        // For Tauri, we'll do a basic format check instead of API call
+        // to avoid CORS issues in the desktop environment
+        return apiKey.startsWith('sk-') && apiKey.length > 20
       } else if (provider === 'gemini') {
-        const genAI = new GoogleGenerativeAI(apiKey)
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
-        await model.generateContent('test')
-        return true
+        // Gemini keys are typically longer and don't have a specific prefix
+        // We'll do a basic length check
+        return apiKey.length > 20
       }
       return false
     } catch (error) {

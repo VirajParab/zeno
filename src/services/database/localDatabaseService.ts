@@ -35,15 +35,20 @@ export class LocalDatabaseService implements DatabaseInterface {
 
   async createTask(taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>): Promise<Task> {
     const now = new Date().toISOString()
-    const task: Task = {
+    const taskDataWithTimestamps = {
       ...taskData,
-      id: crypto.randomUUID(),
       created_at: now,
       updated_at: now,
-      sync_status: 'pending'
+      sync_status: 'pending' as const
     }
 
-    await localDB.tasks.add(task)
+    // Let Dexie auto-generate the ID
+    const id = await localDB.tasks.add(taskDataWithTimestamps as any)
+    
+    const task: Task = {
+      id: id.toString(),
+      ...taskDataWithTimestamps
+    }
     
     // Add to sync queue if online
     if (this.isOnline()) {
@@ -100,14 +105,19 @@ export class LocalDatabaseService implements DatabaseInterface {
 
   async createMessage(messageData: Omit<Message, 'id' | 'inserted_at'>): Promise<Message> {
     const now = new Date().toISOString()
-    const message: Message = {
+    const messageDataWithTimestamp = {
       ...messageData,
-      id: crypto.randomUUID(),
       inserted_at: now,
-      sync_status: 'pending'
+      sync_status: 'pending' as const
     }
 
-    await localDB.messages.add(message)
+    // Let Dexie auto-generate the ID
+    const id = await localDB.messages.add(messageDataWithTimestamp as any)
+    
+    const message: Message = {
+      id: id.toString(),
+      ...messageDataWithTimestamp
+    }
     
     // Add to sync queue if online
     if (this.isOnline()) {
@@ -170,16 +180,21 @@ export class LocalDatabaseService implements DatabaseInterface {
 
   async createAPIKey(apiKeyData: Omit<APIKey, 'id' | 'created_at' | 'updated_at'>): Promise<APIKey> {
     const now = new Date().toISOString()
-    const apiKey: APIKey = {
+    const apiKeyDataWithTimestamps = {
       ...apiKeyData,
-      id: crypto.randomUUID(),
       created_at: now,
       updated_at: now,
       usage_count: 0,
-      sync_status: 'pending'
+      sync_status: 'pending' as const
     }
 
-    await localDB.apiKeys.add(apiKey)
+    // Let Dexie auto-generate the ID
+    const id = await localDB.apiKeys.add(apiKeyDataWithTimestamps as any)
+    
+    const apiKey: APIKey = {
+      id: id.toString(),
+      ...apiKeyDataWithTimestamps
+    }
     
     // Add to sync queue if online
     if (this.isOnline()) {
