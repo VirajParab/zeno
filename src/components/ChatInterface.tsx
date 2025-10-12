@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useDatabase } from '../services/database/DatabaseContext'
 import { AIService } from '../services/ai/aiService'
 import { AIModelConfig, AIProvider, AVAILABLE_MODELS } from '../services/ai/types'
+import ReactMarkdown from 'react-markdown'
 
 interface ChatInterfaceProps {
   // Remove modelConfig prop since we'll manage it internally
@@ -20,6 +21,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    console.log('ChatInterface mounted, loading data...')
     loadMessages()
     loadAPIKeys()
   }, [])
@@ -138,10 +140,15 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
   }
 
   const loadMessages = async () => {
-    if (!database) return
+    if (!database) {
+      console.log('No database available yet')
+      return
+    }
     
     try {
+      console.log('Loading messages...')
       const allMessages = await database.getMessages()
+      console.log('Loaded messages:', allMessages)
       setMessages(allMessages)
     } catch (error) {
       console.error('Failed to load messages:', error)
@@ -366,8 +373,40 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
                   : 'bg-white text-gray-900 shadow-sm border border-gray-200'
               }`}
             >
-              <div className="whitespace-pre-wrap">{message.content}</div>
-              {message.tokens && (
+              {message.role === 'assistant' ? (
+                <div>
+                  {(() => {
+                    try {
+                      return (
+                        <ReactMarkdown 
+                          components={{
+                            p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                            ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                            ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                            li: ({ children }) => <li className="text-sm">{children}</li>,
+                            strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                            em: ({ children }) => <em className="italic">{children}</em>,
+                            code: ({ children }) => <code className="bg-gray-100 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
+                            pre: ({ children }) => <pre className="bg-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</pre>,
+                            blockquote: ({ children }) => <blockquote className="border-l-4 border-gray-300 pl-4 italic text-gray-600">{children}</blockquote>,
+                            h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                            h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
+                            h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                          }}
+                        >
+                          {message.content || 'No content'}
+                        </ReactMarkdown>
+                      )
+                    } catch (error) {
+                      console.error('Markdown rendering error:', error)
+                      return <div className="whitespace-pre-wrap">{message.content}</div>
+                    }
+                  })()}
+                </div>
+              ) : (
+                <div className="whitespace-pre-wrap">{message.content}</div>
+              )}
+              {message.tokens && message.tokens > 0 && (
                 <div className="text-xs opacity-70 mt-2">
                   {message.tokens} tokens • ${message.cost?.toFixed(4)}
                 </div>

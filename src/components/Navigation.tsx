@@ -12,7 +12,7 @@ const Navigation = ({ activeTab, onTabChange }: NavigationProps) => {
 
   const tabs = [
     { id: 'dashboard' as ActiveTab, label: 'Dashboard', icon: '🏠' },
-    { id: 'chat' as ActiveTab, label: 'AI Chat', icon: '💬' },
+    { id: 'chat' as ActiveTab, label: 'Talk to Zeno', icon: '💬' },
     { id: 'tasks' as ActiveTab, label: 'Tasks', icon: '📋' },
     { id: 'habits' as ActiveTab, label: 'Habits', icon: '🎯' },
     { id: 'settings' as ActiveTab, label: 'Settings', icon: '⚙️' },

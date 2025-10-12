@@ -26,7 +26,7 @@ export class LocalDatabaseService implements DatabaseInterface {
     return await localDB.tasks
       .where('user_id')
       .equals(this.config.userId)
-      .toArray()
+      .sortBy('created_at')
   }
 
   async getTask(id: string): Promise<Task | null> {
@@ -101,7 +101,6 @@ export class LocalDatabaseService implements DatabaseInterface {
     return await localDB.messages
       .where('user_id')
       .equals(this.config.userId)
-      .reverse()
       .sortBy('inserted_at')
   }
 

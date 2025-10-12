@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useDatabase } from '../services/database/DatabaseContext'
 
 const Dashboard = () => {
-  const database = useDatabase()
+  const { database } = useDatabase()
   const [stats, setStats] = useState({
     tasksToday: 0,
     tasksCompleted: 0,
@@ -11,10 +11,14 @@ const Dashboard = () => {
   })
 
   useEffect(() => {
-    loadStats()
-  }, [])
+    if (database) {
+      loadStats()
+    }
+  }, [database])
 
   const loadStats = async () => {
+    if (!database) return
+    
     try {
       const tasks = await database.getTasks()
       const messages = await database.getMessages()
