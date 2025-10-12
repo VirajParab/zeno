@@ -1,14 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { DatabaseProvider } from './services/database/DatabaseContext'
 import { AIModelConfig } from './services/ai/types'
+import { AIService } from './services/ai/aiService'
+import { AdvancedZenoCoachingService, UserProfile } from './services/ai/advancedZenoCoachingService'
 
 // Import new components
 import Navigation from './components/Navigation'
 import Dashboard from './components/Dashboard'
 import ChatInterface from './components/ChatInterface'
-import EnhancedTaskBoard from './components/EnhancedTaskBoard'
+import ZenoTaskBoard from './components/ZenoTaskBoard'
 import HabitTracker from './components/HabitTracker'
 import Settings from './components/Settings'
+import ConversationalOnboarding from './components/ConversationalOnboarding'
 
 type ActiveTab = 'dashboard' | 'chat' | 'tasks' | 'habits' | 'settings'
 
@@ -21,19 +24,50 @@ function App() {
     temperature: 0.7,
     maxTokens: 400
   })
+  const [aiService] = useState(() => new AIService())
+  const [coachingService] = useState(() => new AdvancedZenoCoachingService(aiService))
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [isOnboarding, setIsOnboarding] = useState(false)
+
+  useEffect(() => {
+    // Check if user has completed onboarding
+    const savedProfile = localStorage.getItem('zeno-user-profile')
+    if (savedProfile) {
+      try {
+        const profile = JSON.parse(savedProfile)
+        setUserProfile(profile)
+        coachingService.createUserProfile(profile)
+      } catch (error) {
+        console.error('Failed to load user profile:', error)
+        setIsOnboarding(true)
+      }
+    } else {
+      setIsOnboarding(true)
+    }
+  }, [coachingService])
 
   const handleModelChange = (config: AIModelConfig) => {
     setSelectedModelConfig(config)
   }
 
+  const handleOnboardingComplete = (profile: UserProfile) => {
+    setUserProfile(profile)
+    setIsOnboarding(false)
+    localStorage.setItem('zeno-user-profile', JSON.stringify(profile))
+  }
+
   const renderContent = () => {
+    if (isOnboarding) {
+      return <ConversationalOnboarding onComplete={handleOnboardingComplete} coachingService={coachingService} />
+    }
+
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard />
+        return <Dashboard coachingService={coachingService} userProfile={userProfile} />
       case 'chat':
         return <ChatInterface />
       case 'tasks':
-        return <EnhancedTaskBoard />
+        return <ZenoTaskBoard coachingService={coachingService} userProfile={userProfile} />
       case 'habits':
         return <HabitTracker />
       case 'settings':
@@ -44,18 +78,18 @@ function App() {
           />
         )
       default:
-        return <Dashboard />
+        return <Dashboard coachingService={coachingService} userProfile={userProfile} />
     }
   }
 
   return (
     <DatabaseProvider userId={userId}>
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        {/* Navigation */}
-        <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
+        {!isOnboarding && (
+          <Navigation activeTab={activeTab} onTabChange={setActiveTab} userProfile={userProfile} />
+        )}
         
-        {/* Main Content */}
-        <main className="pt-16">
+        <main className={isOnboarding ? '' : 'pt-16'}>
           {renderContent()}
         </main>
       </div>

@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useDatabase } from '../services/database/DatabaseContext'
+import { AdvancedZenoCoachingService, UserProfile } from '../services/ai/advancedZenoCoachingService'
 
-const Dashboard = () => {
+interface DashboardProps {
+  coachingService: AdvancedZenoCoachingService
+  userProfile: UserProfile | null
+}
+
+const Dashboard = ({ coachingService, userProfile }: DashboardProps) => {
   const { database } = useDatabase()
   const [stats, setStats] = useState({
     tasksToday: 0,
@@ -9,12 +15,75 @@ const Dashboard = () => {
     habitsTracked: 0,
     messagesCount: 0
   })
+  const [dailyCheckIn, setDailyCheckIn] = useState<string>('')
+  const [showCheckIn, setShowCheckIn] = useState(false)
+  const [userResponse, setUserResponse] = useState('')
+  const [isTyping, setIsTyping] = useState(false)
 
   useEffect(() => {
     if (database) {
       loadStats()
     }
-  }, [database])
+    if (userProfile) {
+      generateDailyCheckIn()
+    }
+  }, [database, userProfile])
+
+  const generateDailyCheckIn = async () => {
+    if (!userProfile) return
+    
+    try {
+      const now = new Date()
+      const hour = now.getHours()
+      
+      let message = ''
+      if (hour >= 6 && hour < 12) {
+        message = await coachingService.generateMorningCheckIn()
+      } else if (hour >= 12 && hour < 18) {
+        message = await coachingService.generateMiddayCheckIn([], [])
+      } else {
+        message = await coachingService.generateEveningReflection([], [])
+      }
+      
+      setDailyCheckIn(message)
+    } catch (error) {
+      console.error('Failed to generate daily check-in:', error)
+      setDailyCheckIn(`Good ${getTimeOfDay()}, ${userProfile.name}! 
+
+How are you feeling today? What's your main focus? I'm here to help you stay on track with your goals. 🌟`)
+    }
+  }
+
+  const getTimeOfDay = () => {
+    const hour = new Date().getHours()
+    if (hour >= 6 && hour < 12) return 'morning'
+    if (hour >= 12 && hour < 18) return 'afternoon'
+    return 'evening'
+  }
+
+  const getCheckInIcon = () => {
+    const hour = new Date().getHours()
+    if (hour >= 6 && hour < 12) return '🌅'
+    if (hour >= 12 && hour < 18) return '☀️'
+    return '🌙'
+  }
+
+  const sendResponse = async () => {
+    if (!userResponse.trim()) return
+
+    setIsTyping(true)
+    try {
+      // Process user response and generate follow-up
+      setTimeout(() => {
+        setDailyCheckIn(prev => prev + '\n\nThanks for sharing! I\'ll use this to help you stay focused and motivated today. Keep up the great work! 🌟')
+        setUserResponse('')
+        setIsTyping(false)
+      }, 2000)
+    } catch (error) {
+      console.error('Failed to process response:', error)
+      setIsTyping(false)
+    }
+  }
 
   const loadStats = async () => {
     if (!database) return
@@ -79,12 +148,68 @@ const Dashboard = () => {
       {/* Welcome Section */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Welcome back! 👋
+          Welcome back{userProfile ? `, ${userProfile.name}` : ''}! 👋
         </h1>
         <p className="text-gray-600">
           Here's what's happening with your productivity today.
         </p>
       </div>
+
+      {/* Daily Coaching Section */}
+      {userProfile && dailyCheckIn && (
+        <div className="mb-8 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white text-2xl">
+              {getCheckInIcon()}
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Daily Check-In</h2>
+              <p className="text-sm text-gray-600">Your conversation with Zeno</p>
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 rounded-lg p-4 mb-4">
+            <p className="text-gray-900 leading-relaxed whitespace-pre-wrap">
+              {dailyCheckIn}
+            </p>
+          </div>
+
+          {!showCheckIn ? (
+            <button
+              onClick={() => setShowCheckIn(true)}
+              className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-300 font-semibold"
+            >
+              Respond to Zeno
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <textarea
+                value={userResponse}
+                onChange={(e) => setUserResponse(e.target.value)}
+                placeholder="Share your thoughts with Zeno..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 resize-none"
+                rows={3}
+                disabled={isTyping}
+              />
+              <div className="flex space-x-3">
+                <button
+                  onClick={sendResponse}
+                  disabled={!userResponse.trim() || isTyping}
+                  className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+                >
+                  {isTyping ? 'Sending...' : 'Send Response'}
+                </button>
+                <button
+                  onClick={() => setShowCheckIn(false)}
+                  className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all duration-300 font-semibold"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

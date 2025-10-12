@@ -2,12 +2,15 @@ import { useState } from 'react'
 
 type ActiveTab = 'dashboard' | 'chat' | 'tasks' | 'habits' | 'settings'
 
+import { UserProfile } from '../services/ai/advancedZenoCoachingService'
+
 interface NavigationProps {
   activeTab: ActiveTab
   onTabChange: (tab: ActiveTab) => void
+  userProfile?: UserProfile | null
 }
 
-const Navigation = ({ activeTab, onTabChange }: NavigationProps) => {
+const Navigation = ({ activeTab, onTabChange, userProfile }: NavigationProps) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   const tabs = [
