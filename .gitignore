@@ -25,6 +25,8 @@ src-tauri/target/
 src-tauri/Cargo.lock
 src-tauri/target/release/
 src-tauri/target/debug/
+src-tauri/target/**/*
+src-tauri/Cargo.lock
 
 # IDE and editor files
 .vscode/
@@ -121,3 +123,27 @@ temp/
 
 # Local development
 .local
+
+# Large files and logs
+*.log
+output.log
+*.sqlite
+*.db
+*.sqlite3
+
+# Package manager files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build artifacts
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
