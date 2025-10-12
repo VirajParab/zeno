@@ -1,5 +1,5 @@
+import { GoogleGenAI } from '@google/genai'
 import OpenAI from 'openai'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { DatabaseInterface } from '../database/types'
 import { AIProvider, AIModel, AIModelConfig, ChatMessage, AVAILABLE_MODELS } from './types'
 
@@ -22,9 +22,10 @@ export class AIService {
       throw new Error(`No active API key found for provider: ${modelConfig.provider}`)
     }
 
-    const model = AVAILABLE_MODELS.find(m => m.id === modelConfig.modelId)
-    if (!model) {
-      throw new Error(`Model not found: ${modelConfig.modelId}`)
+    // Validate model dynamically by checking if it's available for the provider
+    const availableModels = await this.listAvailableModels(modelConfig.provider)
+    if (!availableModels.includes(modelConfig.modelId)) {
+      throw new Error(`Model ${modelConfig.modelId} is not available for provider ${modelConfig.provider}`)
     }
 
     // Get recent messages for context
@@ -156,15 +157,8 @@ export class AIService {
     recentMessages: any[],
     systemPrompt?: string
   ): Promise<{ response: string; tokens: number; cost: number }> {
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ 
-      model: modelConfig.modelId,
-      generationConfig: {
-        temperature: modelConfig.temperature || 0.7,
-        maxOutputTokens: modelConfig.maxTokens || 400,
-      }
-    })
-
+    const genAI = new GoogleGenAI({ apiKey })
+    
     // Build conversation history
     let conversationHistory = ''
     if (systemPrompt) {
@@ -177,23 +171,71 @@ export class AIService {
 
     const prompt = conversationHistory + `User: ${text}\n\nAssistant:`
 
-    const result = await model.generateContent(prompt)
-    const response = result.response.text()
+    const requestConfig = {
+      model: modelConfig.modelId,
+      contents: prompt,
+      config: {
+        temperature: modelConfig.temperature || 0.7,
+        generationConfig: {
+          maxOutputTokens: modelConfig.maxTokens || 32768,
+        }
+      }
+    }
+
+    console.log('Sending request with config:', JSON.stringify(requestConfig, null, 2))
+
+    const response = await genAI.models.generateContent(requestConfig)
     
-    // Gemini doesn't provide token count in the same way, so we estimate
-    const tokens = Math.ceil(prompt.length / 4) + Math.ceil(response.length / 4) // Rough estimate
+    const responseText = response.text || ''
+    
+    // Debug token usage
+    const usageMetadata = response.usageMetadata
+    console.log('Token usage debug:', {
+      promptTokens: usageMetadata?.promptTokenCount,
+      thoughtsTokens: usageMetadata?.thoughtsTokenCount,
+      totalTokens: usageMetadata?.totalTokenCount,
+      maxOutputTokens: modelConfig.maxTokens || 32768,
+      responseLength: responseText.length,
+      finishReason: response.candidates?.[0]?.finishReason
+    })
+    
+    // Check if response was cut off due to token limits
+    if (!responseText && response.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+      throw new Error(`Response was cut off due to token limit. Used ${usageMetadata?.totalTokenCount || 'unknown'} tokens (${usageMetadata?.thoughtsTokenCount || 'unknown'} for thinking). Try increasing max tokens.`)
+    }
+    
+    // Use actual token count from usage metadata if available
+    const tokens = usageMetadata?.totalTokenCount || Math.ceil(prompt.length / 4) + Math.ceil(responseText.length / 4)
     const costPerToken = 0.00001 // Rough estimate for Gemini
     const cost = tokens * costPerToken
 
-    return { response, tokens, cost }
+    return { response: responseText, tokens, cost }
   }
 
   async getAvailableModels(): Promise<AIModel[]> {
-    return AVAILABLE_MODELS
+    // Return a combination of static models and dynamic models
+    const staticModels = AVAILABLE_MODELS
+    return staticModels
   }
 
   async getModelsByProvider(provider: AIProvider): Promise<AIModel[]> {
-    return AVAILABLE_MODELS.filter(model => model.provider === provider)
+    // Get dynamic models for the provider
+    const dynamicModelIds = await this.listAvailableModels(provider)
+    
+    if (dynamicModelIds.length > 0) {
+      // Convert dynamic model IDs to AIModel objects
+      return dynamicModelIds.map(modelId => ({
+        id: modelId,
+        name: modelId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        provider: provider,
+        description: `Available ${provider} model`,
+        maxTokens: 1000000,
+        capabilities: ['text']
+      }))
+    } else {
+      // Fallback to static models
+      return AVAILABLE_MODELS.filter(model => model.provider === provider)
+    }
   }
 
   async validateAPIKey(provider: AIProvider, apiKey: string): Promise<boolean> {
@@ -221,6 +263,68 @@ export class AIService {
     } catch (error) {
       console.error('API key validation failed:', error)
       return false
+    }
+  }
+
+  async validateModel(provider: AIProvider, modelId: string): Promise<boolean> {
+    try {
+      const availableModels = await this.listAvailableModels(provider)
+      return availableModels.includes(modelId)
+    } catch (error) {
+      console.error('Model validation failed:', error)
+      return false
+    }
+  }
+
+  async debugAvailableModels(provider: AIProvider): Promise<void> {
+    try {
+      if (provider === 'gemini') {
+        const apiKey = await this.database.getActiveAPIKey(provider)
+        if (!apiKey) {
+          console.error('No active API key found for Gemini')
+          return
+        }
+        
+        console.log('=== DEBUG: Fetching Gemini Models via Direct API ===')
+        
+        // Use direct API call for debugging
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.key}`)
+        
+        if (!response.ok) {
+          console.error(`API Error: ${response.status} ${response.statusText}`)
+          const errorText = await response.text()
+          console.error('Error response:', errorText)
+          return
+        }
+        
+        const data = await response.json()
+        console.log('Full API response:', data)
+        
+        const models = data.models || []
+        console.log(`Found ${models.length} total models via direct API`)
+        
+        models.forEach((model: any, index: number) => {
+          console.log(`Model ${index + 1}:`, {
+            name: model.name,
+            displayName: model.displayName,
+            state: model.state,
+            supportedGenerationMethods: model.supportedGenerationMethods,
+            description: model.description
+          })
+        })
+        
+        const generateContentModels = models.filter((model: any) => 
+          model.supportedGenerationMethods?.includes('generateContent')
+        )
+        
+        console.log(`Found ${generateContentModels.length} models that support generateContent:`)
+        generateContentModels.forEach((model: any) => {
+          console.log(`- ${model.name} (${model.displayName})`)
+        })
+        
+      }
+    } catch (error) {
+      console.error('Debug failed:', error)
     }
   }
 
@@ -254,5 +358,60 @@ export class AIService {
     })
 
     return stats
+  }
+
+  async listAvailableModels(provider: AIProvider): Promise<string[]> {
+    try {
+      if (provider === 'gemini') {
+        const apiKey = await this.database.getActiveAPIKey(provider)
+        if (!apiKey) {
+          throw new Error('No active API key found for Gemini')
+        }
+        
+        // Use direct API call for model listing (more reliable than SDK)
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.key}`)
+        if (!response.ok) {
+          throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`)
+        }
+        
+        const data = await response.json()
+        const models = data.models || []
+        
+        console.log('Raw models from API:', models.map((m: any) => ({
+          name: m.name,
+          supportedMethods: m.supportedGenerationMethods,
+          displayName: m.displayName
+        })))
+        
+        // Filter models that support generateContent and are available
+        const availableModels = models
+          .filter((model: any) => {
+            const hasGenerateContent = model.supportedGenerationMethods?.includes('generateContent')
+            const isAvailable = model.state === 'ACTIVE' || !model.state // Some models don't have state field
+            const isModel = model.name.startsWith('models/')
+            
+            console.log(`Model ${model.name}: generateContent=${hasGenerateContent}, available=${isAvailable}, isModel=${isModel}`)
+            
+            return hasGenerateContent && isAvailable && isModel
+          })
+          .map((model: any) => model.name.replace('models/', ''))
+        
+        console.log('Filtered available Gemini models:', availableModels)
+        return availableModels
+      } else if (provider === 'openai') {
+        // For OpenAI, return our predefined models
+        return AVAILABLE_MODELS
+          .filter(model => model.provider === 'openai')
+          .map(model => model.id)
+      }
+      return []
+    } catch (error) {
+      console.error(`Failed to list models for ${provider}:`, error)
+      // Fallback to predefined models if API call fails
+      if (provider === 'gemini') {
+        return ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-1.5-flash', 'gemini-1.5-pro']
+      }
+      return []
+    }
   }
 }

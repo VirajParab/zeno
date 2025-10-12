@@ -76,11 +76,19 @@ export const AVAILABLE_MODELS: AIModel[] = [
   
   // Gemini Models
   {
-    id: 'gemini-1.5-pro',
-    name: 'Gemini 1.5 Pro',
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
     provider: 'gemini',
-    description: 'Google\'s most capable multimodal model',
-    maxTokens: 2000000,
+    description: 'Latest fast and efficient model for quick responses',
+    maxTokens: 32768,
+    capabilities: ['text', 'vision', 'audio']
+  },
+  {
+    id: 'gemini-2.5-pro',
+    name: 'Gemini 2.5 Pro',
+    provider: 'gemini',
+    description: 'Most capable model for complex tasks (requires thinking mode)',
+    maxTokens: 32768,
     capabilities: ['text', 'vision', 'audio', 'function-calling']
   },
   {
@@ -88,16 +96,16 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'Gemini 1.5 Flash',
     provider: 'gemini',
     description: 'Fast and efficient Gemini model',
-    maxTokens: 1000000,
+    maxTokens: 32768,
     capabilities: ['text', 'vision', 'audio']
   },
   {
-    id: 'gemini-1.0-pro',
-    name: 'Gemini 1.0 Pro',
+    id: 'gemini-1.5-pro',
+    name: 'Gemini 1.5 Pro',
     provider: 'gemini',
-    description: 'Reliable Gemini model for text tasks',
-    maxTokens: 30720,
-    capabilities: ['text', 'function-calling']
+    description: 'Google\'s most capable multimodal model',
+    maxTokens: 32768,
+    capabilities: ['text', 'vision', 'audio', 'function-calling']
   }
 ]
 

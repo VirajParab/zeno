@@ -14,6 +14,11 @@ const Settings = ({ onModelChange }: SettingsProps) => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [autoSync, setAutoSync] = useState(true)
   const [selectedLanguage, setSelectedLanguage] = useState('en')
+  const [apiKeyRefreshTrigger, setApiKeyRefreshTrigger] = useState(0)
+
+  const handleApiKeyChange = () => {
+    setApiKeyRefreshTrigger(prev => prev + 1)
+  }
 
   const sections = [
     { 
@@ -85,7 +90,7 @@ const Settings = ({ onModelChange }: SettingsProps) => {
                 Configure your API keys for OpenAI and Google Gemini to enable AI features and unlock the full potential of Zeno AI.
               </p>
             </div>
-            <APIKeyConfig />
+            <APIKeyConfig onApiKeyChange={handleApiKeyChange} />
           </div>
         )
       
@@ -103,7 +108,7 @@ const Settings = ({ onModelChange }: SettingsProps) => {
                 Select and configure your preferred AI models, adjust parameters, and customize the AI experience to match your needs.
               </p>
             </div>
-            <ModelSelector onModelChange={onModelChange} />
+            <ModelSelector key={apiKeyRefreshTrigger} onModelChange={onModelChange} />
           </div>
         )
       

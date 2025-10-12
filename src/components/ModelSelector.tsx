@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useDatabase } from '../services/database/DatabaseContext'
 import { AIProvider, AIModel, AIModelConfig, AVAILABLE_MODELS } from '../services/ai/types'
+import { AIService } from '../services/ai/aiService'
 
 interface ModelSelectorProps {
   onModelChange: (config: AIModelConfig) => void
@@ -16,6 +17,7 @@ export function ModelSelector({ onModelChange, className = '' }: ModelSelectorPr
   const [maxTokens, setMaxTokens] = useState(400)
   const [systemPrompt, setSystemPrompt] = useState('')
   const [apiKeys, setApiKeys] = useState<any[]>([])
+  const [dynamicModels, setDynamicModels] = useState<string[]>([])
 
   const hasActiveKey = (provider: AIProvider) => {
     return !!apiKeys.find(key => key.provider === provider && key.is_active)
@@ -54,6 +56,12 @@ export function ModelSelector({ onModelChange, className = '' }: ModelSelectorPr
     onModelChange(config)
   }, [selectedProvider, selectedModel, temperature, maxTokens, systemPrompt])
 
+  useEffect(() => {
+    if (database) {
+      loadData()
+    }
+  }, [database])
+
   const loadData = async () => {
     if (!database) return
     
@@ -64,8 +72,29 @@ export function ModelSelector({ onModelChange, className = '' }: ModelSelectorPr
       
       // Auto-select a provider that has an active API key
       const activeProvider = keys.find(key => key.is_active)?.provider
-      if (activeProvider && activeProvider !== selectedProvider) {
+      if (activeProvider) {
         setSelectedProvider(activeProvider)
+        
+        // Fetch dynamic models for the active provider
+        const aiService = new AIService(database, 'demo-user-123')
+        
+        // Debug: Show all available models
+        if (activeProvider === 'gemini') {
+          await aiService.debugAvailableModels(activeProvider)
+        }
+        
+        const models = await aiService.listAvailableModels(activeProvider)
+        setDynamicModels(models)
+        
+        // Set default model
+        if (models.length > 0) {
+          setSelectedModel(models[0])
+        } else {
+          const providerModels = AVAILABLE_MODELS.filter(model => model.provider === activeProvider)
+          if (providerModels.length > 0) {
+            setSelectedModel(providerModels[0].id)
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to load data:', error)
@@ -78,6 +107,48 @@ export function ModelSelector({ onModelChange, className = '' }: ModelSelectorPr
 
   const getSelectedModelInfo = () => {
     return availableModels.find(model => model.id === selectedModel)
+  }
+
+  const handleProviderChange = async (provider: AIProvider) => {
+    setSelectedProvider(provider)
+    
+    // Fetch dynamic models for the new provider
+    if (database) {
+      try {
+        const aiService = new AIService(database, 'demo-user-123')
+        const models = await aiService.listAvailableModels(provider)
+        setDynamicModels(models)
+        
+        // Set default model
+        if (models.length > 0) {
+          setSelectedModel(models[0])
+        } else {
+          const providerModels = AVAILABLE_MODELS.filter(model => model.provider === provider)
+          if (providerModels.length > 0) {
+            setSelectedModel(providerModels[0].id)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load models for provider:', error)
+      }
+    }
+  }
+
+  const getAvailableModelsForProvider = () => {
+    if (dynamicModels.length > 0) {
+      // Use dynamically fetched models
+      return dynamicModels.map(modelId => ({
+        id: modelId,
+        name: modelId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        provider: selectedProvider,
+        description: `Available ${selectedProvider} model`,
+        maxTokens: 1000000,
+        capabilities: ['text']
+      }))
+    } else {
+      // Fallback to predefined models
+      return AVAILABLE_MODELS.filter(model => model.provider === selectedProvider)
+    }
   }
 
   return (
@@ -102,7 +173,7 @@ export function ModelSelector({ onModelChange, className = '' }: ModelSelectorPr
             return (
               <button
                 key={provider}
-                onClick={() => hasKey && setSelectedProvider(provider)}
+                onClick={() => handleProviderChange(provider)}
                 disabled={!hasKey}
                 className={`p-6 rounded-xl border-2 transition-all duration-200 text-left ${
                   isSelected
@@ -166,11 +237,19 @@ export function ModelSelector({ onModelChange, className = '' }: ModelSelectorPr
           <div>
             <h3 className="text-xl font-semibold text-gray-900">AI Model Selection</h3>
             <p className="text-gray-600">Choose the specific model for your AI interactions</p>
+            {dynamicModels.length > 0 && (
+              <div className="mt-2 flex items-center space-x-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm text-green-600 font-medium">
+                  {dynamicModels.length} models loaded from API
+                </span>
+              </div>
+            )}
           </div>
         </div>
         
         <div className="space-y-4">
-          {availableModels.map(model => {
+          {getAvailableModelsForProvider().map(model => {
             const isSelected = selectedModel === model.id
             const isRecommended = model.id.includes('gpt-4') || model.id.includes('gemini-pro')
             

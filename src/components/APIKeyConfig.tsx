@@ -5,9 +5,10 @@ import { AIProvider, AIModel, APIKey, AVAILABLE_MODELS } from '../services/ai/ty
 
 interface APIKeyConfigProps {
   className?: string
+  onApiKeyChange?: () => void
 }
 
-export function APIKeyConfig({ className = '' }: APIKeyConfigProps) {
+export function APIKeyConfig({ className = '', onApiKeyChange }: APIKeyConfigProps) {
   const { database } = useDatabase()
   const [apiKeys, setApiKeys] = useState<APIKey[]>([])
   const [availableModels, setAvailableModels] = useState<AIModel[]>([])
@@ -95,6 +96,7 @@ export function APIKeyConfig({ className = '' }: APIKeyConfigProps) {
       setSuccess(`API key for ${selectedProvider} added successfully!`)
       setApiKey('')
       await loadData()
+      onApiKeyChange?.()
     } catch (error) {
       console.error('Failed to add API key:', error)
       setError(`Failed to add API key: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -118,6 +120,7 @@ export function APIKeyConfig({ className = '' }: APIKeyConfigProps) {
       
       await database.updateAPIKey(keyId, { is_active: !isActive })
       await loadData()
+      onApiKeyChange?.()
     } catch (error) {
       console.error('Failed to toggle API key:', error)
       setError('Failed to update API key')
@@ -133,6 +136,7 @@ export function APIKeyConfig({ className = '' }: APIKeyConfigProps) {
       await database.deleteAPIKey(keyId)
       await loadData()
       setSuccess('API key deleted successfully')
+      onApiKeyChange?.()
     } catch (error) {
       console.error('Failed to delete API key:', error)
       setError('Failed to delete API key')

@@ -31,7 +31,7 @@ function App() {
       case 'dashboard':
         return <Dashboard />
       case 'chat':
-        return <ChatInterface modelConfig={selectedModelConfig} />
+        return <ChatInterface />
       case 'tasks':
         return <TaskBoard />
       case 'habits':
