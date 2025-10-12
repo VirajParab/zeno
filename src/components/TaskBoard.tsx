@@ -3,17 +3,21 @@ import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd'
 import { useDatabase } from '../services/database/DatabaseContext'
 
 const TaskBoard = () => {
-  const database = useDatabase()
+  const { database } = useDatabase()
   const [tasks, setTasks] = useState<any[]>([])
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [newTaskDescription, setNewTaskDescription] = useState('')
   const [showAddForm, setShowAddForm] = useState(false)
 
   useEffect(() => {
-    loadTasks()
-  }, [])
+    if (database) {
+      loadTasks()
+    }
+  }, [database])
 
   const loadTasks = async () => {
+    if (!database) return
+    
     try {
       const allTasks = await database.getTasks()
       setTasks(allTasks)
@@ -23,7 +27,7 @@ const TaskBoard = () => {
   }
 
   const createTask = async () => {
-    if (!newTaskTitle.trim()) return
+    if (!newTaskTitle.trim() || !database) return
 
     try {
       await database.createTask({
@@ -44,6 +48,8 @@ const TaskBoard = () => {
   }
 
   const updateTaskStatus = async (taskId: string, newStatus: 'todo' | 'doing' | 'done') => {
+    if (!database) return
+    
     try {
       await database.updateTask(taskId, { status: newStatus })
       loadTasks()
@@ -53,6 +59,8 @@ const TaskBoard = () => {
   }
 
   const deleteTask = async (taskId: string) => {
+    if (!database) return
+    
     try {
       await database.deleteTask(taskId)
       loadTasks()
@@ -114,7 +122,7 @@ const TaskBoard = () => {
           <button
             onClick={() => setShowAddForm(true)}
             className="btn-primary flex items-center"
-            disabled={!database.database}
+            disabled={!database}
           >
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -124,7 +132,7 @@ const TaskBoard = () => {
         </div>
 
         {/* Loading State */}
-        {!database.database && (
+        {!database && (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 text-2xl mx-auto mb-4">
               ⏳

@@ -6,7 +6,7 @@ import { AIModelConfig } from './services/ai/types'
 import Navigation from './components/Navigation'
 import Dashboard from './components/Dashboard'
 import ChatInterface from './components/ChatInterface'
-import TaskBoard from './components/TaskBoard'
+import EnhancedTaskBoard from './components/EnhancedTaskBoard'
 import HabitTracker from './components/HabitTracker'
 import Settings from './components/Settings'
 
@@ -33,7 +33,7 @@ function App() {
       case 'chat':
         return <ChatInterface />
       case 'tasks':
-        return <TaskBoard />
+        return <EnhancedTaskBoard />
       case 'habits':
         return <HabitTracker />
       case 'settings':

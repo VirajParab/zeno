@@ -1,4 +1,4 @@
-import { DatabaseInterface, Task, Message, SyncConflict, DatabaseConfig, APIKey } from './types'
+import { DatabaseInterface, Task, Message, SyncConflict, DatabaseConfig, APIKey, Column, Reminder } from './types'
 import { localDB } from './localDatabase'
 import { supabase } from '../supabaseClient'
 
@@ -166,6 +166,144 @@ export class LocalDatabaseService implements DatabaseInterface {
     // Add to sync queue if online
     if (this.isOnline()) {
       await this.addToSyncQueue('messages', 'delete', { id })
+    }
+  }
+
+  // Column operations
+  async getColumns(): Promise<Column[]> {
+    return await localDB.columns
+      .where('user_id')
+      .equals(this.config.userId)
+      .sortBy('position')
+  }
+
+  async getColumn(id: string): Promise<Column | null> {
+    return await localDB.columns.get(id) || null
+  }
+
+  async createColumn(columnData: Omit<Column, 'id' | 'created_at' | 'updated_at'>): Promise<Column> {
+    const now = new Date().toISOString()
+    const columnDataWithTimestamp = {
+      ...columnData,
+      created_at: now,
+      updated_at: now,
+      sync_status: 'pending' as const
+    }
+
+    const id = await localDB.columns.add(columnDataWithTimestamp)
+    const createdColumn = await localDB.columns.get(id)
+    if (!createdColumn) {
+      throw new Error('Failed to create column')
+    }
+    
+    const column: Column = {
+      ...createdColumn,
+      id: createdColumn.id.toString()
+    }
+    
+    if (this.isOnline()) {
+      await this.addToSyncQueue('columns', 'create', column)
+    }
+
+    return column
+  }
+
+  async updateColumn(id: string, updates: Partial<Column>): Promise<Column> {
+    const existingColumn = await localDB.columns.get(id)
+    if (!existingColumn) {
+      throw new Error('Column not found')
+    }
+
+    const updatedColumn: Column = {
+      ...existingColumn,
+      ...updates,
+      updated_at: new Date().toISOString(),
+      sync_status: 'pending'
+    }
+
+    await localDB.columns.put(updatedColumn)
+    
+    if (this.isOnline()) {
+      await this.addToSyncQueue('columns', 'update', updatedColumn)
+    }
+
+    return updatedColumn
+  }
+
+  async deleteColumn(id: string): Promise<void> {
+    await localDB.columns.delete(id)
+    
+    if (this.isOnline()) {
+      await this.addToSyncQueue('columns', 'delete', { id })
+    }
+  }
+
+  // Reminder operations
+  async getReminders(): Promise<Reminder[]> {
+    return await localDB.reminders
+      .where('user_id')
+      .equals(this.config.userId)
+      .toArray()
+  }
+
+  async getReminder(id: string): Promise<Reminder | null> {
+    return await localDB.reminders.get(id) || null
+  }
+
+  async createReminder(reminderData: Omit<Reminder, 'id' | 'created_at' | 'updated_at'>): Promise<Reminder> {
+    const now = new Date().toISOString()
+    const reminderDataWithTimestamp = {
+      ...reminderData,
+      created_at: now,
+      updated_at: now,
+      sync_status: 'pending' as const
+    }
+
+    const id = await localDB.reminders.add(reminderDataWithTimestamp)
+    const createdReminder = await localDB.reminders.get(id)
+    if (!createdReminder) {
+      throw new Error('Failed to create reminder')
+    }
+    
+    const reminder: Reminder = {
+      ...createdReminder,
+      id: createdReminder.id.toString()
+    }
+    
+    if (this.isOnline()) {
+      await this.addToSyncQueue('reminders', 'create', reminder)
+    }
+
+    return reminder
+  }
+
+  async updateReminder(id: string, updates: Partial<Reminder>): Promise<Reminder> {
+    const existingReminder = await localDB.reminders.get(id)
+    if (!existingReminder) {
+      throw new Error('Reminder not found')
+    }
+
+    const updatedReminder: Reminder = {
+      ...existingReminder,
+      ...updates,
+      updated_at: new Date().toISOString(),
+      sync_status: 'pending'
+    }
+
+    await localDB.reminders.put(updatedReminder)
+    
+    if (this.isOnline()) {
+      await this.addToSyncQueue('reminders', 'update', updatedReminder)
+    }
+
+    return updatedReminder
+  }
+
+  async deleteReminder(id: string): Promise<void> {
+    await localDB.reminders.delete(id)
+    
+    if (this.isOnline()) {
+      await this.addToSyncQueue('reminders', 'delete', { id })
     }
   }
 

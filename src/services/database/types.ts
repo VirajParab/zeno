@@ -5,11 +5,39 @@ export interface Task {
   user_id: string
   title: string
   description?: string
-  status: 'todo' | 'doing' | 'done'
+  status: string // Now dynamic based on columns
   priority: number
   created_at: string
   updated_at: string
   due_date?: string
+  reminder_date?: string
+  column_id: string
+  position: number
+  sync_status?: 'synced' | 'pending' | 'conflict'
+  last_synced_at?: string
+}
+
+export interface Column {
+  id: string
+  user_id: string
+  title: string
+  color: string
+  position: number
+  created_at: string
+  updated_at: string
+  sync_status?: 'synced' | 'pending' | 'conflict'
+  last_synced_at?: string
+}
+
+export interface Reminder {
+  id: string
+  user_id: string
+  task_id: string
+  reminder_date: string
+  message: string
+  is_sent: boolean
+  created_at: string
+  updated_at: string
   sync_status?: 'synced' | 'pending' | 'conflict'
   last_synced_at?: string
 }
@@ -64,6 +92,20 @@ export interface DatabaseInterface {
   createTask(task: Omit<Task, 'id' | 'created_at' | 'updated_at'>): Promise<Task>
   updateTask(id: string, updates: Partial<Task>): Promise<Task>
   deleteTask(id: string): Promise<void>
+  
+  // Column operations
+  getColumns(): Promise<Column[]>
+  getColumn(id: string): Promise<Column | null>
+  createColumn(column: Omit<Column, 'id' | 'created_at' | 'updated_at'>): Promise<Column>
+  updateColumn(id: string, updates: Partial<Column>): Promise<Column>
+  deleteColumn(id: string): Promise<void>
+  
+  // Reminder operations
+  getReminders(): Promise<Reminder[]>
+  getReminder(id: string): Promise<Reminder | null>
+  createReminder(reminder: Omit<Reminder, 'id' | 'created_at' | 'updated_at'>): Promise<Reminder>
+  updateReminder(id: string, updates: Partial<Reminder>): Promise<Reminder>
+  deleteReminder(id: string): Promise<void>
   
   // Message operations
   getMessages(): Promise<Message[]>
