@@ -175,4 +175,8 @@ zeno-ai/
 
 ## License
 
-MIT License - feel free to use and modify for your needs.
+Zeno is open-source under the [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/).  
+You are free to use, modify, and share this project for personal and educational purposes.  
+Commercial use, reselling, or hosting of Zeno without written permission from the author is prohibited.
+
+© 2025 Viraj Parab. All rights reserved.
