@@ -17,9 +17,19 @@ export function ModelSelector({ onModelChange, className = '' }: ModelSelectorPr
   const [systemPrompt, setSystemPrompt] = useState('')
   const [apiKeys, setApiKeys] = useState<any[]>([])
 
+  const hasActiveKey = (provider: AIProvider) => {
+    return !!apiKeys.find(key => key.provider === provider && key.is_active)
+  }
+
   useEffect(() => {
-    loadData()
-  }, [])
+    // Auto-select a provider that has an active API key when API keys change
+    if (apiKeys.length > 0) {
+      const activeProvider = apiKeys.find(key => key.is_active)?.provider
+      if (activeProvider && !hasActiveKey(selectedProvider)) {
+        setSelectedProvider(activeProvider)
+      }
+    }
+  }, [apiKeys, selectedProvider])
 
   useEffect(() => {
     // Update available models when provider changes
@@ -42,13 +52,21 @@ export function ModelSelector({ onModelChange, className = '' }: ModelSelectorPr
       systemPrompt: systemPrompt || undefined
     }
     onModelChange(config)
-  }, [selectedProvider, selectedModel, temperature, maxTokens, systemPrompt, onModelChange])
+  }, [selectedProvider, selectedModel, temperature, maxTokens, systemPrompt])
 
   const loadData = async () => {
+    if (!database) return
+    
     try {
       const keys = await database.getAPIKeys()
       setApiKeys(keys)
       setAvailableModels(AVAILABLE_MODELS)
+      
+      // Auto-select a provider that has an active API key
+      const activeProvider = keys.find(key => key.is_active)?.provider
+      if (activeProvider && activeProvider !== selectedProvider) {
+        setSelectedProvider(activeProvider)
+      }
     } catch (error) {
       console.error('Failed to load data:', error)
     }
@@ -60,10 +78,6 @@ export function ModelSelector({ onModelChange, className = '' }: ModelSelectorPr
 
   const getSelectedModelInfo = () => {
     return availableModels.find(model => model.id === selectedModel)
-  }
-
-  const hasActiveKey = (provider: AIProvider) => {
-    return !!getActiveKeyForProvider(provider)
   }
 
   return (

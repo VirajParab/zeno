@@ -8,7 +8,7 @@ interface ChatInterfaceProps {
 }
 
 const ChatInterface = ({ modelConfig }: ChatInterfaceProps) => {
-  const database = useDatabase()
+  const { database } = useDatabase()
   const [messages, setMessages] = useState<any[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -27,6 +27,8 @@ const ChatInterface = ({ modelConfig }: ChatInterfaceProps) => {
   }
 
   const loadMessages = async () => {
+    if (!database) return
+    
     try {
       const allMessages = await database.getMessages()
       setMessages(allMessages)
@@ -36,7 +38,7 @@ const ChatInterface = ({ modelConfig }: ChatInterfaceProps) => {
   }
 
   const sendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return
+    if (!inputMessage.trim() || isLoading || !database) return
 
     const userMessage = {
       id: Date.now().toString(),
