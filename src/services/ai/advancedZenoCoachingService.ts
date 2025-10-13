@@ -288,6 +288,72 @@ Respond with JSON:
   }
 
   // Daily Coaching Conversations
+  async generateMorningCheckInWithOlderTasks(olderTasks: any[]): Promise<string> {
+    if (!this.userProfile) {
+      throw new Error('No user profile found')
+    }
+
+    const yesterdayReflection = this.userProfile.dailyReflections
+      .filter(r => r.type === 'evening')
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+
+    const prompt = `
+You are Zeno, conducting a morning check-in with ${this.userProfile.name}.
+
+User Profile:
+- Planning Style: ${this.userProfile.planningStyle}
+- Motivation Style: ${this.userProfile.motivationStyle}
+- Tone Preference: ${this.userProfile.tonePreference}
+- Focus Areas: ${this.userProfile.focusAreas.map(f => f.name).join(', ')}
+
+Yesterday's Reflection:
+${yesterdayReflection ? `
+- Energy Level: ${yesterdayReflection.energyLevel}/10
+- What Went Well: ${yesterdayReflection.whatWentWell}
+- What Could Improve: ${yesterdayReflection.whatCouldImprove}
+` : 'No reflection available'}
+
+Older/Overdue Tasks:
+${olderTasks.length > 0 ? olderTasks.map(task => `- ${task.title} (due: ${task.due_date})`).join('\n') : 'No overdue tasks'}
+
+Generate a warm, personalized morning check-in that:
+1. Greets them warmly
+2. Acknowledges yesterday's progress if available
+3. ${olderTasks.length > 0 ? 'Mentions the overdue tasks and asks how they want to handle them' : ''}
+4. Asks about their main focus for today
+5. Asks about available time for deep work
+6. Asks about any meetings or events
+7. Asks about focus preference (professional vs personal)
+8. Matches their tone preference (${this.userProfile.tonePreference})
+
+Keep it conversational and supportive. If there are overdue tasks, be gentle but direct about addressing them.
+`
+
+    try {
+      const response = await this.aiService.chatWithAI({
+        modelId: 'gemini-2.5-flash',
+        temperature: 0.8,
+        maxTokens: 500
+      }, prompt, [], 'You are Zeno, conducting a warm morning check-in.')
+
+      return response.response
+    } catch (error) {
+      return `Good morning, ${this.userProfile.name}! ☀️
+
+${yesterdayReflection ? `Yesterday you made progress on your goals — nice work!` : ''}
+${olderTasks.length > 0 ? `I notice you have ${olderTasks.length} overdue tasks. Let's talk about how to handle them today.` : ''}
+
+Ready to make today amazing? Let's plan together:
+
+1. What's your main focus today?
+2. How much time do you have for deep work?
+3. Any meetings or personal events I should account for?
+4. Would you like to focus more on your professional or personal goals today?
+
+I'm here to help you create a balanced, productive day! 🌟`
+    }
+  }
+
   async generateMorningCheckIn(): Promise<string> {
     if (!this.userProfile) {
       throw new Error('No user profile found')
@@ -509,6 +575,101 @@ Let's make next week even better! 🚀`
       mostConsistentArea: 'Health',
       leastConsistentArea: 'Finance',
       energyTrend: 'stable'
+    }
+  }
+
+  // AI Chat and Task Management
+  async processDailyCheckInResponse(
+    userMessage: string,
+    context: {
+      currentTasks: any[]
+      olderTasks: any[]
+      completedTasks: string[]
+      skippedTasks: string[]
+      conversationHistory: ConversationMessage[]
+    }
+  ): Promise<{ message: string; taskActions?: any[] }> {
+    if (!this.userProfile) {
+      throw new Error('No user profile found')
+    }
+
+    const prompt = `
+You are Zeno, processing a user's response during a daily check-in conversation.
+
+User Profile:
+- Name: ${this.userProfile.name}
+- Motivation Style: ${this.userProfile.motivationStyle}
+- Tone Preference: ${this.userProfile.tonePreference}
+
+Current Context:
+- Current Tasks: ${context.currentTasks.map(t => `${t.title} (${t.id})`).join(', ')}
+- Older/Overdue Tasks: ${context.olderTasks.map(t => `${t.title} (${t.id}, due: ${t.due_date})`).join(', ')}
+- Completed Tasks: ${context.completedTasks.join(', ')}
+- Skipped Tasks: ${context.skippedTasks.join(', ')}
+
+Recent Conversation:
+${context.conversationHistory.slice(-4).map(msg => `${msg.role}: ${msg.content}`).join('\n')}
+
+User's Response: "${userMessage}"
+
+Analyze the user's response and:
+1. Provide an appropriate conversational response
+2. Identify any task actions they want to take based on their message
+3. Look for mentions of completing, skipping, rescheduling, or updating tasks
+4. Be supportive and match their tone preference
+
+Task Actions Format (if any):
+- complete: Mark a task as done
+- skip: Mark a task as skipped
+- reschedule: Change due date
+- update: Update task details
+
+Respond with JSON:
+{
+  "message": "Your conversational response",
+  "taskActions": [
+    {
+      "type": "complete|skip|reschedule|update",
+      "taskId": "task-id",
+      "newDate": "2024-01-01" (for reschedule),
+      "updates": {} (for update)
+    }
+  ]
+}
+`
+
+    try {
+      const response = await this.aiService.chatWithAI({
+        modelId: 'gemini-2.5-flash',
+        temperature: 0.7,
+        maxTokens: 800
+      }, prompt, [], 'You are Zeno, processing daily check-in responses and managing tasks.')
+
+      const parsedResponse = this.parseTaskManagementResponse(response.response)
+      return parsedResponse
+    } catch (error) {
+      console.error('Failed to process daily check-in response:', error)
+      return {
+        message: "I understand. Let me help you with that. Could you tell me more about what you'd like to focus on today?",
+        taskActions: []
+      }
+    }
+  }
+
+  private parseTaskManagementResponse(aiResponse: string): { message: string; taskActions?: any[] } {
+    try {
+      const jsonMatch = aiResponse.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0])
+      }
+    } catch (error) {
+      console.error('Failed to parse task management response:', error)
+    }
+
+    // Fallback: return just the message
+    return {
+      message: aiResponse,
+      taskActions: []
     }
   }
 
