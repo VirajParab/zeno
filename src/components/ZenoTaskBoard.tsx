@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
 import { useDatabase } from '../services/database/DatabaseContext'
-import { Task, Column, Reminder } from '../services/database/types'
+import { Task, Column } from '../services/database/types'
 import { AdvancedZenoCoachingService, UserProfile } from '../services/ai/advancedZenoCoachingService'
 
 interface ZenoTaskBoardProps {
@@ -9,11 +9,12 @@ interface ZenoTaskBoardProps {
   userProfile: UserProfile | null
 }
 
-const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => {
+const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
   const { database } = useDatabase()
   const [tasks, setTasks] = useState<Task[]>([])
   const [columns, setColumns] = useState<Column[]>([])
   const [dailyPlan, setDailyPlan] = useState<any>(null)
+  const [goals, setGoals] = useState<any[]>([])
   const [showZenoChat, setShowZenoChat] = useState(false)
   const [zenoMessage, setZenoMessage] = useState('')
   const [chatHistory, setChatHistory] = useState<Array<{ role: 'user' | 'zeno', message: string }>>([])
@@ -40,7 +41,6 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
   })
   
   // UI states
-  const [isDragging, setIsDragging] = useState(false)
   const [hoveredColumn, setHoveredColumn] = useState<string | null>(null)
   const [showDailyPlan, setShowDailyPlan] = useState(false)
   
@@ -68,17 +68,25 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
     if (!database) return
     
     try {
-      const [tasksData, columnsData, remindersData] = await Promise.all([
+      const [tasksData, columnsData] = await Promise.all([
         database.getTasks(),
-        database.getColumns(),
-        database.getReminders()
+        database.getColumns()
       ])
       
       setTasks(tasksData)
       setColumns(columnsData.sort((a, b) => a.position - b.position))
       
       // Load goals from coaching service
-      setGoals(coachingService.getGoals())
+      try {
+        if ((coachingService as any).getGoals) {
+          setGoals((coachingService as any).getGoals())
+        } else {
+          setGoals([]) // Fallback if method doesn't exist
+        }
+      } catch (error) {
+        console.error('Failed to load goals:', error)
+        setGoals([])
+      }
     } catch (error) {
       console.error('Failed to load data:', error)
     }
@@ -114,8 +122,21 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
   const generateTodayPlan = async () => {
     try {
       const today = new Date().toISOString().split('T')[0]
-      const plan = await coachingService.generateDailyPlan(today, tasks)
-      setDailyPlan(plan)
+      if ((coachingService as any).generateDailyPlan) {
+        const plan = await (coachingService as any).generateDailyPlan(today, tasks)
+        setDailyPlan(plan)
+      } else {
+        // Fallback: create a simple plan
+        const fallbackPlan = {
+          date: today,
+          focusTasks: tasks.filter(t => t.priority === 1).slice(0, 3),
+          maintenanceTasks: tasks.filter(t => t.priority === 2).slice(0, 2),
+          wellbeingTasks: tasks.filter(t => t.priority === 3).slice(0, 2),
+          completedTasks: [],
+          createdAt: new Date().toISOString()
+        }
+        setDailyPlan(fallbackPlan)
+      }
     } catch (error) {
       console.error('Failed to generate daily plan:', error)
     }
@@ -291,7 +312,6 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
 
   // Enhanced drag and drop
   const onDragEnd = async (result: DropResult) => {
-    setIsDragging(false)
     setHoveredColumn(null)
     
     if (!database) return
@@ -302,7 +322,7 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
     if (destination.droppableId === source.droppableId && destination.index === source.index) return
     
     try {
-      const task = tasks.find(t => t.id === draggableId)
+      const task = tasks.find(t => t.id.toString() === draggableId)
       if (!task) return
       
       const newColumnId = destination.droppableId === 'unassigned' ? null : destination.droppableId
@@ -311,14 +331,14 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
       // Get all tasks in the destination column
       const tasksInDestinationColumn = tasks.filter(t => {
         if (destination.droppableId === 'unassigned') {
-          return (!t.column_id || t.column_id === 'default') && t.id !== draggableId
+          return (!t.column_id || t.column_id === 'default') && t.id.toString() !== draggableId
         }
-        return t.column_id === newColumnId && t.id !== draggableId
+        return t.column_id === newColumnId && t.id.toString() !== draggableId
       })
       
       // Update the dragged task
       await database.updateTask(task.id, {
-        column_id: newColumnId,
+        column_id: newColumnId || undefined,
         position: newPosition
       })
       
@@ -349,7 +369,7 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
   }
 
   const onDragStart = () => {
-    setIsDragging(true)
+    // Drag started
   }
 
   // Zeno Chat
@@ -361,7 +381,7 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
     setChatHistory(prev => [...prev, { role: 'user', message: userMessage }])
     
     try {
-      const response = await coachingService.chatWithZeno(userMessage, {
+      const response = await (coachingService as any).chatWithZeno(userMessage, {
         tasks: tasks,
         goals: goals,
         dailyPlan: dailyPlan
@@ -559,7 +579,7 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
                     Focus Tasks (Most Impactful)
                   </h3>
                   <div className="space-y-2">
-                    {dailyPlan.focusTasks.map((task, index) => (
+                    {dailyPlan.focusTasks.map((task: any, index: number) => (
                       <div key={index} className="p-3 bg-white/5 rounded-lg border border-white/10">
                         <div className="font-medium text-white">{task.title}</div>
                         <div className="text-white/70 text-sm">{task.description}</div>
@@ -577,7 +597,7 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
                     Maintenance Tasks (Routines)
                   </h3>
                   <div className="space-y-2">
-                    {dailyPlan.maintenanceTasks.map((task, index) => (
+                    {dailyPlan.maintenanceTasks.map((task: any, index: number) => (
                       <div key={index} className="p-3 bg-white/5 rounded-lg border border-white/10">
                         <div className="font-medium text-white">{task.title}</div>
                         <div className="text-white/70 text-sm">{task.description}</div>
@@ -594,7 +614,7 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
                     Wellbeing Tasks (Self-Care)
                   </h3>
                   <div className="space-y-2">
-                    {dailyPlan.wellbeingTasks.map((task, index) => (
+                    {dailyPlan.wellbeingTasks.map((task: any, index: number) => (
                       <div key={index} className="p-3 bg-white/5 rounded-lg border border-white/10">
                         <div className="font-medium text-white">{task.title}</div>
                         <div className="text-white/70 text-sm">{task.description}</div>
@@ -938,7 +958,7 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
                   </div>
                 </div>
                 
-                <Droppable droppableId={column.id}>
+                <Droppable droppableId={column.id.toString()}>
                   {(provided, snapshot) => (
                     <div
                       ref={provided.innerRef}
@@ -948,7 +968,7 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
                       }`}
                     >
                       {getTasksByColumn(column.id).map((task, index) => (
-                        <Draggable key={task.id} draggableId={task.id} index={index}>
+                        <Draggable key={task.id} draggableId={task.id.toString()} index={index}>
                           {(provided, snapshot) => (
                             <div
                               ref={provided.innerRef}

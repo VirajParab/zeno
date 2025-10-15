@@ -42,7 +42,9 @@ export function DatabaseProvider({ children, userId }: DatabaseProviderProps) {
     }
   }, [])
 
+  // Initialize database only once on mount
   useEffect(() => {
+    console.log('Initializing database on mount')
     const initializeDatabase = async () => {
       try {
         const db = createDatabaseService(config)
@@ -52,22 +54,29 @@ export function DatabaseProvider({ children, userId }: DatabaseProviderProps) {
         // Load conflicts if any
         const conflictList = await db.getConflicts()
         setConflicts(conflictList)
+        console.log('Database initialized successfully')
       } catch (error) {
         console.error('Failed to initialize database:', error)
       }
     }
 
     initializeDatabase()
+  }, []) // Only run once on mount
 
+  // Cleanup database only on unmount
+  useEffect(() => {
     return () => {
       if (database) {
+        console.log('Closing database on unmount')
         database.close()
       }
     }
-  }, [config])
+  }, [])
 
   const setMode = async (mode: DatabaseMode) => {
+    console.log('Setting database mode to:', mode)
     if (database) {
+      console.log('Closing existing database before mode change')
       await database.close()
     }
     

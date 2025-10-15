@@ -579,7 +579,7 @@ const EnhancedTaskBoard = () => {
                   </div>
                 </div>
                 
-                <Droppable droppableId={column.id}>
+                <Droppable droppableId={column.id.toString()}>
                   {(provided, snapshot) => (
                     <div
                       ref={provided.innerRef}
@@ -589,7 +589,7 @@ const EnhancedTaskBoard = () => {
                       }`}
                     >
                       {getTasksByColumn(column.id).map((task, index) => (
-                        <Draggable key={task.id} draggableId={task.id} index={index}>
+                        <Draggable key={task.id} draggableId={task.id.toString()} index={index}>
                           {(provided, snapshot) => (
                             <div
                               ref={provided.innerRef}

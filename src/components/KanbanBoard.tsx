@@ -88,7 +88,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ userId }) => {
         {columns.map(column => (
           <div key={column.id} className="kanban-column">
             <h3>{column.title}</h3>
-            <Droppable droppableId={column.id}>
+            <Droppable droppableId={column.id.toString()}>
               {(provided, snapshot) => (
                 <div
                   ref={provided.innerRef}
@@ -99,7 +99,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ userId }) => {
                   }}
                 >
                   {column.tasks.map((task, index) => (
-                    <Draggable key={task.id} draggableId={task.id} index={index}>
+                    <Draggable key={task.id} draggableId={task.id.toString()} index={index}>
                       {(provided, snapshot) => (
                         <div
                           ref={provided.innerRef}

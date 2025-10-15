@@ -10,11 +10,24 @@ export class LocalDatabaseService implements DatabaseInterface {
   }
 
   async initialize(): Promise<void> {
-    await localDB.open()
+    console.log('=== INITIALIZING LOCAL DATABASE ===')
+    console.log('Database state before open:', localDB.isOpen())
+    try {
+      await localDB.open()
+      console.log('Database opened successfully')
+      console.log('Database state after open:', localDB.isOpen())
+    } catch (error) {
+      console.error('Failed to open database:', error)
+      throw error
+    }
   }
 
   async close(): Promise<void> {
+    console.log('=== CLOSING LOCAL DATABASE ===')
+    console.log('Database state before close:', localDB.isOpen())
+    console.trace('Database close called from:')
     await localDB.close()
+    console.log('Database closed successfully')
   }
 
   isOnline(): boolean {
@@ -105,21 +118,37 @@ export class LocalDatabaseService implements DatabaseInterface {
   }
 
   async getMessagesByChatSession(chatSessionId: string): Promise<Message[]> {
+    console.log(`=== GETTING MESSAGES BY CHAT SESSION ===`)
+    console.log(`chatSessionId: ${chatSessionId}`)
+    console.log(`chatSessionId type: ${typeof chatSessionId}`)
+    
     // Get all messages for user and filter by chat_session_id
     const allMessages = await localDB.messages
       .where('user_id')
       .equals(this.config.userId)
       .toArray()
     
-    return allMessages
+    console.log(`Total messages for user: ${allMessages.length}`)
+    console.log(`All message chat_session_ids:`, allMessages.map(m => ({ 
+      id: m.id, 
+      chat_session_id: m.chat_session_id, 
+      chat_session_id_type: typeof m.chat_session_id 
+    })))
+    
+    const filteredMessages = allMessages
       .filter(msg => {
         // Handle both string and number chat_session_id values
         const msgSessionId = msg.chat_session_id
-        return msgSessionId === chatSessionId || 
+        const matches = msgSessionId === chatSessionId || 
                msgSessionId === chatSessionId.toString() || 
                msgSessionId?.toString() === chatSessionId
+        console.log(`Message ${msg.id}: ${msgSessionId} (${typeof msgSessionId}) matches ${chatSessionId} (${typeof chatSessionId}): ${matches}`)
+        return matches
       })
       .sort((a, b) => new Date(a.inserted_at).getTime() - new Date(b.inserted_at).getTime())
+    
+    console.log(`Filtered messages: ${filteredMessages.length}`)
+    return filteredMessages
   }
 
   async getMessage(id: string): Promise<Message | null> {
@@ -127,6 +156,11 @@ export class LocalDatabaseService implements DatabaseInterface {
   }
 
   async createMessage(messageData: Omit<Message, 'id' | 'inserted_at'>): Promise<Message> {
+    console.log(`=== CREATING MESSAGE ===`)
+    console.log(`messageData:`, messageData)
+    console.log(`chat_session_id:`, messageData.chat_session_id)
+    console.log(`chat_session_id type:`, typeof messageData.chat_session_id)
+    
     const now = new Date().toISOString()
     const messageDataWithTimestamp = {
       ...messageData,
@@ -136,6 +170,7 @@ export class LocalDatabaseService implements DatabaseInterface {
 
     // Let Dexie auto-generate the ID - don't include id field
     const id = await localDB.messages.add(messageDataWithTimestamp)
+    console.log(`Created message with ID: ${id}`)
     
     // Fetch the created message to get the auto-generated ID
     const createdMessage = await localDB.messages.get(id)
@@ -143,10 +178,14 @@ export class LocalDatabaseService implements DatabaseInterface {
       throw new Error('Failed to create message')
     }
     
+    console.log(`Retrieved created message:`, createdMessage)
+    
     const message: Message = {
       ...createdMessage,
       id: createdMessage.id.toString()
     }
+    
+    console.log(`Final message:`, message)
     
     // Add to sync queue if online
     if (this.isOnline()) {

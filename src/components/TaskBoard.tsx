@@ -75,11 +75,11 @@ const TaskBoard = () => {
     if (!destination) return
     if (destination.droppableId === source.droppableId && destination.index === source.index) return
 
-    const task = tasks.find(t => t.id === draggableId)
+    const task = tasks.find(t => t.id.toString() === draggableId)
     if (!task) return
 
     const newStatus = destination.droppableId as 'todo' | 'doing' | 'done'
-    await updateTaskStatus(draggableId, newStatus)
+    await updateTaskStatus(task.id, newStatus)
   }
 
   const columns = [
@@ -200,7 +200,7 @@ const TaskBoard = () => {
                     </span>
                   </div>
                   
-                  <Droppable droppableId={column.id}>
+                  <Droppable droppableId={column.id.toString()}>
                     {(provided, snapshot) => (
                       <div
                         ref={provided.innerRef}
@@ -210,7 +210,7 @@ const TaskBoard = () => {
                         }`}
                       >
                         {getTasksByStatus(column.id).map((task, index) => (
-                          <Draggable key={task.id} draggableId={task.id} index={index}>
+                          <Draggable key={task.id} draggableId={task.id.toString()} index={index}>
                             {(provided, snapshot) => (
                               <div
                                 ref={provided.innerRef}

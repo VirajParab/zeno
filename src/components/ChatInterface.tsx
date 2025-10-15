@@ -38,6 +38,10 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
 
   useEffect(() => {
     console.log('ChatInterface mounted, loading data...')
+    console.log('Database available:', !!database)
+    if (database) {
+      console.log('Database type:', database.constructor.name)
+    }
     // Load chat sessions from database
     loadChatSessions()
     loadAPIKeys()
@@ -483,6 +487,12 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
         
         const actualMessages = await database.getMessagesByChatSession(actualChatId)
         console.log(`Found ${actualMessages.length} messages for session ${actualChatId}`)
+        console.log(`Message details:`, actualMessages.map(m => ({ 
+          id: m.id, 
+          chat_session_id: m.chat_session_id, 
+          chat_session_id_type: typeof m.chat_session_id,
+          content: m.content.substring(0, 50) + '...' 
+        })))
         
         await database.updateChatSession(actualChatId, {
           last_message_at: new Date().toISOString(),
