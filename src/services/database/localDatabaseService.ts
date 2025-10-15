@@ -1,4 +1,4 @@
-import { DatabaseInterface, Task, Message, SyncConflict, DatabaseConfig, APIKey, Column, Reminder } from './types'
+import { DatabaseInterface, Task, Message, SyncConflict, DatabaseConfig, APIKey, Column, Reminder, ChatSession } from './types'
 import { localDB } from './localDatabase'
 import { supabase } from '../supabaseClient'
 
@@ -104,6 +104,18 @@ export class LocalDatabaseService implements DatabaseInterface {
       .sortBy('inserted_at')
   }
 
+  async getMessagesByChatSession(chatSessionId: string): Promise<Message[]> {
+    // Get all messages for user and filter by chat_session_id
+    const allMessages = await localDB.messages
+      .where('user_id')
+      .equals(this.config.userId)
+      .toArray()
+    
+    return allMessages
+      .filter(msg => msg.chat_session_id === chatSessionId)
+      .sort((a, b) => new Date(a.inserted_at).getTime() - new Date(b.inserted_at).getTime())
+  }
+
   async getMessage(id: string): Promise<Message | null> {
     return await localDB.messages.get(id) || null
   }
@@ -166,6 +178,81 @@ export class LocalDatabaseService implements DatabaseInterface {
     // Add to sync queue if online
     if (this.isOnline()) {
       await this.addToSyncQueue('messages', 'delete', { id })
+    }
+  }
+
+  // Chat Session operations
+  async getChatSessions(): Promise<ChatSession[]> {
+    return await localDB.chatSessions
+      .where('user_id')
+      .equals(this.config.userId)
+      .sortBy('last_message_at')
+      .then(sessions => sessions.reverse()) // Most recent first
+  }
+
+  async getChatSession(id: string): Promise<ChatSession | null> {
+    return await localDB.chatSessions.get(id) || null
+  }
+
+  async createChatSession(chatSessionData: Omit<ChatSession, 'id' | 'created_at' | 'updated_at'>): Promise<ChatSession> {
+    const now = new Date().toISOString()
+    const chatSessionDataWithTimestamp = {
+      ...chatSessionData,
+      created_at: now,
+      updated_at: now,
+      sync_status: 'pending' as const
+    }
+
+    const id = await localDB.chatSessions.add(chatSessionDataWithTimestamp)
+    
+    // Fetch the created chat session to get the auto-generated ID
+    const createdChatSession = await localDB.chatSessions.get(id)
+    if (!createdChatSession) {
+      throw new Error('Failed to create chat session')
+    }
+    
+    const chatSession: ChatSession = {
+      ...createdChatSession,
+      id: createdChatSession.id.toString()
+    }
+    
+    // Add to sync queue if online
+    if (this.isOnline()) {
+      await this.addToSyncQueue('chatSessions', 'create', chatSession)
+    }
+
+    return chatSession
+  }
+
+  async updateChatSession(id: string, updates: Partial<ChatSession>): Promise<ChatSession> {
+    const existingChatSession = await localDB.chatSessions.get(id)
+    if (!existingChatSession) {
+      throw new Error('Chat session not found')
+    }
+
+    const updatedChatSession: ChatSession = {
+      ...existingChatSession,
+      ...updates,
+      updated_at: new Date().toISOString(),
+      sync_status: 'pending'
+    }
+
+    await localDB.chatSessions.put(updatedChatSession)
+    
+    // Add to sync queue if online
+    if (this.isOnline()) {
+      await this.addToSyncQueue('chatSessions', 'update', updatedChatSession)
+    }
+
+    return updatedChatSession
+  }
+
+  async deleteChatSession(id: string): Promise<void> {
+    await localDB.chatSessions.delete(id)
+    
+    // Add to sync queue if online
+    if (this.isOnline()) {
+      await this.addToSyncQueue('chatSessions', 'delete', { id })
     }
   }
 

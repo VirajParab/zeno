@@ -2,16 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useDatabase } from '../services/database/DatabaseContext'
 import { AIService } from '../services/ai/aiService'
 import { AIModelConfig, AIProvider, AVAILABLE_MODELS } from '../services/ai/types'
-import { Task } from '../services/database/types'
+import { Task, ChatSession } from '../services/database/types'
 import ReactMarkdown from 'react-markdown'
-
-interface ChatSession {
-  id: string
-  title: string
-  createdAt: string
-  lastMessageAt: string
-  messageCount: number
-}
 
 interface ChatInterfaceProps {
   // Remove modelConfig prop since we'll manage it internally
@@ -40,8 +32,8 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
 
   useEffect(() => {
     console.log('ChatInterface mounted, loading data...')
-    // Clear all previous messages for fresh start
-    clearAllMessages()
+    // Load chat sessions from database
+    loadChatSessions()
     loadAPIKeys()
     // Don't initialize sample chats - start fresh
     loadTasks()
@@ -160,24 +152,22 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const clearAllMessages = async () => {
+  const loadChatSessions = async () => {
     if (!database) {
       console.log('No database available yet')
       return
     }
     
     try {
-      console.log('Clearing all messages for fresh start...')
-      const allMessages = await database.getMessages()
-      // Delete all messages to start fresh
-      for (const message of allMessages) {
-        await database.deleteMessage(message.id)
-      }
-      console.log('Cleared all messages')
+      console.log('Loading chat sessions...')
+      const sessions = await database.getChatSessions()
+      console.log('Loaded chat sessions:', sessions)
+      setChatHistory(sessions)
     } catch (error) {
-      console.error('Failed to clear messages:', error)
+      console.error('Failed to load chat sessions:', error)
     }
   }
+
 
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading || !database) return
@@ -195,18 +185,35 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
 
     // Update chat title if this is the first user message
     if (messages.length === 0) {
-      const title = generateChatTitle(inputMessage)
+      const title = generateDailyChatTitle()
       // Create a new chat session for the first message
       const newChatId = `chat-${Date.now()}`
-      const newSession: ChatSession = {
-        id: newChatId,
+      const newSession: Omit<ChatSession, 'id' | 'created_at' | 'updated_at'> = {
+        user_id: 'demo-user-123',
         title: title,
-        createdAt: new Date().toISOString(),
-        lastMessageAt: new Date().toISOString(),
-        messageCount: 1
+        last_message_at: new Date().toISOString(),
+        message_count: 1
       }
-      setChatHistory(prev => [newSession, ...prev])
-      setCurrentChatId(newChatId)
+      
+      try {
+        const createdSession = await database.createChatSession(newSession)
+        setChatHistory(prev => [createdSession, ...prev])
+        setCurrentChatId(createdSession.id)
+      } catch (error) {
+        console.error('Failed to create chat session:', error)
+        // Fallback to local state if database fails
+        const fallbackSession: ChatSession = {
+          id: newChatId,
+          user_id: 'demo-user-123',
+          title: title,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          last_message_at: new Date().toISOString(),
+          message_count: 1
+        }
+        setChatHistory(prev => [fallbackSession, ...prev])
+        setCurrentChatId(newChatId)
+      }
     }
 
     try {
@@ -221,7 +228,8 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
           temperature: 0.3,
           maxTokens: 1000
         },
-        'You are a JSON-only response generator for task creation.'
+        'You are a JSON-only response generator for task creation.',
+        currentChatId // Pass the current chat session ID
       )
       
       // Try to parse JSON response for tasks
@@ -286,13 +294,24 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       setMessages(prev => [...prev, assistantMessage])
       
       // Update chat message count
-      setChatHistory(prev => 
-        prev.map(chat => 
-          chat.id === currentChatId 
-            ? { ...chat, lastMessageAt: new Date().toISOString(), messageCount: chat.messageCount + 1 }
-            : chat
+      try {
+        await database.updateChatSession(currentChatId, {
+          last_message_at: new Date().toISOString(),
+          message_count: (chatHistory.find(chat => chat.id === currentChatId)?.message_count || 0) + 1
+        })
+        // Reload chat sessions to get updated data
+        await loadChatSessions()
+      } catch (error) {
+        console.error('Failed to update chat session:', error)
+        // Fallback to local state update
+        setChatHistory(prev => 
+          prev.map(chat => 
+            chat.id === currentChatId 
+              ? { ...chat, last_message_at: new Date().toISOString(), message_count: chat.message_count + 1 }
+              : chat
+          )
         )
-      )
+      }
       
       // If AI provided tasks, set up pending task creation
       if (aiTasks.length > 0) {
@@ -312,13 +331,24 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       setMessages(prev => [...prev, errorMessage])
       
       // Update chat message count for error message too
-      setChatHistory(prev => 
-        prev.map(chat => 
-          chat.id === currentChatId 
-            ? { ...chat, lastMessageAt: new Date().toISOString(), messageCount: chat.messageCount + 1 }
-            : chat
+      try {
+        await database.updateChatSession(currentChatId, {
+          last_message_at: new Date().toISOString(),
+          message_count: (chatHistory.find(chat => chat.id === currentChatId)?.message_count || 0) + 1
+        })
+        // Reload chat sessions to get updated data
+        await loadChatSessions()
+      } catch (updateError) {
+        console.error('Failed to update chat session:', updateError)
+        // Fallback to local state update
+        setChatHistory(prev => 
+          prev.map(chat => 
+            chat.id === currentChatId 
+              ? { ...chat, last_message_at: new Date().toISOString(), message_count: chat.message_count + 1 }
+              : chat
+          )
         )
-      )
+      }
     } finally {
       setIsLoading(false)
     }
@@ -332,61 +362,95 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
   }
 
 
-  const generateChatTitle = (message: string): string => {
-    const words = message.toLowerCase().split(' ')
-    const keyWords = words.filter(word => 
-      word.length > 3 && 
-      !['want', 'need', 'would', 'like', 'help', 'with', 'about', 'this', 'that'].includes(word)
-    )
+  const generateDailyChatTitle = (): string => {
+    const today = new Date()
+    const dayName = today.toLocaleDateString('en-US', { weekday: 'long' })
+    const monthName = today.toLocaleDateString('en-US', { month: 'long' })
+    const day = today.getDate()
     
-    if (keyWords.length > 0) {
-      const title = keyWords.slice(0, 3).join(' ')
-      return title.charAt(0).toUpperCase() + title.slice(1)
-    }
-    
-    return 'New Chat'
+    return `${dayName}, ${monthName} ${day}`
   }
 
-  const createNewChat = () => {
-    const newChatId = `chat-${Date.now()}`
-    const newSession: ChatSession = {
-      id: newChatId,
-      title: 'New Chat',
-      createdAt: new Date().toISOString(),
-      lastMessageAt: new Date().toISOString(),
-      messageCount: 0
+
+  const createNewChat = async () => {
+    const title = generateDailyChatTitle()
+    const newSession: Omit<ChatSession, 'id' | 'created_at' | 'updated_at'> = {
+      user_id: 'demo-user-123',
+      title: title,
+      last_message_at: new Date().toISOString(),
+      message_count: 0
     }
     
-    setChatHistory(prev => [newSession, ...prev])
-    setCurrentChatId(newChatId)
-    setMessages([])
-  }
-
-  const deleteChatSession = (chatId: string) => {
-    setChatHistory(prev => prev.filter(chat => chat.id !== chatId))
-    
-    if (chatId === currentChatId) {
-      setCurrentChatId('default')
+    try {
+      const createdSession = await database.createChatSession(newSession)
+      setChatHistory(prev => [createdSession, ...prev])
+      setCurrentChatId(createdSession.id)
+      setMessages([])
+    } catch (error) {
+      console.error('Failed to create new chat session:', error)
+      // Fallback to local state if database fails
+      const fallbackSession: ChatSession = {
+        id: `chat-${Date.now()}`,
+        user_id: 'demo-user-123',
+        title: title,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        last_message_at: new Date().toISOString(),
+        message_count: 0
+      }
+      setChatHistory(prev => [fallbackSession, ...prev])
+      setCurrentChatId(fallbackSession.id)
       setMessages([])
     }
   }
 
-  const loadChatSession = (chatId: string) => {
-    setCurrentChatId(chatId)
-    // In a real app, you'd load messages from storage based on chatId
-    // For this demo, we'll just simulate by clearing messages
-    setMessages([])
+  const deleteChatSession = async (chatId: string) => {
+    try {
+      await database.deleteChatSession(chatId)
+      setChatHistory(prev => prev.filter(chat => chat.id !== chatId))
+      
+      if (chatId === currentChatId) {
+        setCurrentChatId('default')
+        setMessages([])
+      }
+    } catch (error) {
+      console.error('Failed to delete chat session:', error)
+      // Fallback to local state update
+      setChatHistory(prev => prev.filter(chat => chat.id !== chatId))
+      
+      if (chatId === currentChatId) {
+        setCurrentChatId('default')
+        setMessages([])
+      }
+    }
   }
 
-  const updateChatTitle = (title: string) => {
-    setChatHistory(prev => 
-      prev.map(chat => 
-        chat.id === currentChatId 
-          ? { ...chat, title, lastMessageAt: new Date().toISOString(), messageCount: chat.messageCount + 1 }
-          : chat
-      )
-    )
+  const loadChatSession = async (chatId: string) => {
+    setCurrentChatId(chatId)
+    
+    try {
+      // Load messages for this specific chat session
+      const chatMessages = await database.getMessagesByChatSession(chatId)
+      console.log('Loaded messages for chat session:', chatMessages)
+      
+      // Transform database messages to the format expected by the UI
+      const uiMessages = chatMessages.map(msg => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.inserted_at,
+        model: msg.model,
+        tokens: msg.tokens,
+        cost: msg.cost
+      }))
+      
+      setMessages(uiMessages)
+    } catch (error) {
+      console.error('Failed to load chat session messages:', error)
+      setMessages([])
+    }
   }
+
 
   // Helper functions to parse AI response format
   const parseTimeToMinutes = (timeStr: string): number => {
@@ -556,7 +620,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
                       </h3>
                       <div className="flex items-center space-x-2">
                         <span className="text-xs text-gray-500">
-                          {chat.messageCount} msgs
+                          {chat.message_count} msgs
                         </span>
                         <button
                           onClick={(e) => {
@@ -571,7 +635,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
                       </div>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      {new Date(chat.lastMessageAt).toLocaleDateString()}
+                      {new Date(chat.last_message_at).toLocaleDateString()}
                     </p>
                   </div>
                 </div>

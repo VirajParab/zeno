@@ -15,7 +15,8 @@ export class AIService {
   async chatWithAI(
     text: string, 
     modelConfig: AIModelConfig,
-    systemPrompt?: string
+    systemPrompt?: string,
+    chatSessionId?: string
   ): Promise<ChatMessage> {
     const apiKey = await this.database.getActiveAPIKey(modelConfig.provider)
     if (!apiKey) {
@@ -77,7 +78,8 @@ export class AIService {
         model: modelConfig.modelId,
         provider: modelConfig.provider,
         tokens: 0, // We don't count input tokens for simplicity
-        cost: 0
+        cost: 0,
+        chat_session_id: chatSessionId
       })
 
       const assistantMessage = await this.database.createMessage({
@@ -87,7 +89,8 @@ export class AIService {
         model: modelConfig.modelId,
         provider: modelConfig.provider,
         tokens,
-        cost
+        cost,
+        chat_session_id: chatSessionId
       })
 
       return {

@@ -52,6 +52,7 @@ export interface Message {
   provider?: string
   tokens?: number
   cost?: number
+  chat_session_id?: string // New field to associate messages with chat sessions
   sync_status?: 'synced' | 'pending' | 'conflict'
   last_synced_at?: string
 }
@@ -66,6 +67,18 @@ export interface APIKey {
   updated_at: string
   last_used_at?: string
   usage_count: number
+  sync_status?: 'synced' | 'pending' | 'conflict'
+  last_synced_at?: string
+}
+
+export interface ChatSession {
+  id: string
+  user_id: string
+  title: string
+  created_at: string
+  updated_at: string
+  last_message_at: string
+  message_count: number
   sync_status?: 'synced' | 'pending' | 'conflict'
   last_synced_at?: string
 }
@@ -109,6 +122,7 @@ export interface DatabaseInterface {
   
   // Message operations
   getMessages(): Promise<Message[]>
+  getMessagesByChatSession(chatSessionId: string): Promise<Message[]>
   getMessage(id: string): Promise<Message | null>
   createMessage(message: Omit<Message, 'id' | 'inserted_at'>): Promise<Message>
   updateMessage(id: string, updates: Partial<Message>): Promise<Message>
@@ -121,6 +135,13 @@ export interface DatabaseInterface {
   createAPIKey(apiKey: Omit<APIKey, 'id' | 'created_at' | 'updated_at'>): Promise<APIKey>
   updateAPIKey(id: string, updates: Partial<APIKey>): Promise<APIKey>
   deleteAPIKey(id: string): Promise<void>
+  
+  // Chat Session operations
+  getChatSessions(): Promise<ChatSession[]>
+  getChatSession(id: string): Promise<ChatSession | null>
+  createChatSession(chatSession: Omit<ChatSession, 'id' | 'created_at' | 'updated_at'>): Promise<ChatSession>
+  updateChatSession(id: string, updates: Partial<ChatSession>): Promise<ChatSession>
+  deleteChatSession(id: string): Promise<void>
   
   // Sync operations
   sync(): Promise<void>

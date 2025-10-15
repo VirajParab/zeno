@@ -1,4 +1,4 @@
-import { DatabaseInterface, Task, Message, SyncConflict, DatabaseConfig, APIKey } from './types'
+import { DatabaseInterface, Task, Message, SyncConflict, DatabaseConfig, APIKey, ChatSession } from './types'
 import { getSupabaseClient } from '../supabaseClient'
 
 export class CloudDatabaseService implements DatabaseInterface {
@@ -112,6 +112,20 @@ export class CloudDatabaseService implements DatabaseInterface {
     return data || []
   }
 
+  async getMessagesByChatSession(chatSessionId: string): Promise<Message[]> {
+    const supabase = getSupabaseClient()
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('user_id', this.config.userId)
+      .eq('chat_session_id', chatSessionId)
+      .order('inserted_at', { ascending: true })
+      .limit(100)
+
+    if (error) throw error
+    return data || []
+  }
+
   async getMessage(id: string): Promise<Message | null> {
     const supabase = getSupabaseClient()
     const { data, error } = await supabase
@@ -158,6 +172,82 @@ export class CloudDatabaseService implements DatabaseInterface {
     const supabase = getSupabaseClient()
     const { error } = await supabase
       .from('messages')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', this.config.userId)
+
+    if (error) throw error
+  }
+
+  // Chat Session operations
+  async getChatSessions(): Promise<ChatSession[]> {
+    const supabase = getSupabaseClient()
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .select('*')
+      .eq('user_id', this.config.userId)
+      .order('last_message_at', { ascending: false })
+      .limit(50)
+
+    if (error) throw error
+    return data || []
+  }
+
+  async getChatSession(id: string): Promise<ChatSession | null> {
+    const supabase = getSupabaseClient()
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', this.config.userId)
+      .single()
+
+    if (error) {
+      if (error.code === 'PGRST116') return null // No rows returned
+      throw error
+    }
+    return data
+  }
+
+  async createChatSession(chatSessionData: Omit<ChatSession, 'id' | 'created_at' | 'updated_at'>): Promise<ChatSession> {
+    const supabase = getSupabaseClient()
+    const now = new Date().toISOString()
+    
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .insert({
+        ...chatSessionData,
+        created_at: now,
+        updated_at: now
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  }
+
+  async updateChatSession(id: string, updates: Partial<ChatSession>): Promise<ChatSession> {
+    const supabase = getSupabaseClient()
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .eq('user_id', this.config.userId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  }
+
+  async deleteChatSession(id: string): Promise<void> {
+    const supabase = getSupabaseClient()
+    const { error } = await supabase
+      .from('chat_sessions')
       .delete()
       .eq('id', id)
       .eq('user_id', this.config.userId)

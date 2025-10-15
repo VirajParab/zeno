@@ -1,4 +1,4 @@
-import { DatabaseInterface, Task, Message, SyncConflict, DatabaseConfig, APIKey } from './types'
+import { DatabaseInterface, Task, Message, SyncConflict, DatabaseConfig, APIKey, ChatSession } from './types'
 import { LocalDatabaseService } from './localDatabaseService'
 import { CloudDatabaseService } from './cloudDatabaseService'
 
@@ -88,6 +88,10 @@ export class SyncDatabaseService implements DatabaseInterface {
     return await this.localService.getMessages()
   }
 
+  async getMessagesByChatSession(chatSessionId: string): Promise<Message[]> {
+    return await this.localService.getMessagesByChatSession(chatSessionId)
+  }
+
   async getMessage(id: string): Promise<Message | null> {
     return await this.localService.getMessage(id)
   }
@@ -133,6 +137,58 @@ export class SyncDatabaseService implements DatabaseInterface {
         await this.cloudService.deleteMessage(id)
       } catch (error) {
         console.error('Failed to sync message deletion to cloud:', error)
+      }
+    }
+  }
+
+  // Chat Session operations - always work with local first, sync to cloud
+  async getChatSessions(): Promise<ChatSession[]> {
+    return await this.localService.getChatSessions()
+  }
+
+  async getChatSession(id: string): Promise<ChatSession | null> {
+    return await this.localService.getChatSession(id)
+  }
+
+  async createChatSession(chatSessionData: Omit<ChatSession, 'id' | 'created_at' | 'updated_at'>): Promise<ChatSession> {
+    const chatSession = await this.localService.createChatSession(chatSessionData)
+    
+    // Try to sync to cloud if online
+    if (this.isOnline()) {
+      try {
+        await this.cloudService.createChatSession(chatSessionData)
+      } catch (error) {
+        console.error('Failed to sync chat session creation to cloud:', error)
+      }
+    }
+
+    return chatSession
+  }
+
+  async updateChatSession(id: string, updates: Partial<ChatSession>): Promise<ChatSession> {
+    const chatSession = await this.localService.updateChatSession(id, updates)
+    
+    // Try to sync to cloud if online
+    if (this.isOnline()) {
+      try {
+        await this.cloudService.updateChatSession(id, updates)
+      } catch (error) {
+        console.error('Failed to sync chat session update to cloud:', error)
+      }
+    }
+
+    return chatSession
+  }
+
+  async deleteChatSession(id: string): Promise<void> {
+    await this.localService.deleteChatSession(id)
+    
+    // Try to sync to cloud if online
+    if (this.isOnline()) {
+      try {
+        await this.cloudService.deleteChatSession(id)
+      } catch (error) {
+        console.error('Failed to sync chat session deletion to cloud:', error)
       }
     }
   }
