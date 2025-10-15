@@ -336,7 +336,7 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
         if (destination.droppableId === 'unassigned') {
           return (!t.column_id || t.column_id === 'default') && t.id.toString() !== draggableId
         }
-        return t.column_id === newColumnId && t.id.toString() !== draggableId
+        return t.column_id?.toString() === newColumnId && t.id.toString() !== draggableId
       })
       
       // Update the dragged task
@@ -451,7 +451,7 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
         .sort((a, b) => a.position - b.position)
     }
     return tasks
-      .filter(task => task.column_id === columnId)
+      .filter(task => task.column_id?.toString() === columnId)
       .sort((a, b) => a.position - b.position)
   }
 
@@ -996,87 +996,85 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
         <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart}>
           <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 overflow-hidden">
             {/* Unassigned Tasks Column */}
-            {getFilteredTasksByColumn('unassigned').length > 0 && (
-              <div className="bg-white/90 backdrop-blur-sm border border-gray-200/50 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300">
-                <div className="p-4 rounded-t-2xl bg-gradient-to-r from-amber-100 to-yellow-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold text-gray-800 text-sm">Unassigned Tasks</h3>
-                      <span className="text-gray-500 text-xs">
-                        {getFilteredTasksByColumn('unassigned').length} tasks
-                      </span>
-                    </div>
+            <div className="bg-white/90 backdrop-blur-sm border border-gray-200/50 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300">
+              <div className="p-4 rounded-t-2xl bg-gradient-to-r from-amber-100 to-yellow-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-gray-800 text-sm">Unassigned Tasks</h3>
+                    <span className="text-gray-500 text-xs">
+                      {getFilteredTasksByColumn('unassigned').length} tasks
+                    </span>
                   </div>
                 </div>
-                
-                <Droppable droppableId="unassigned">
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className={`p-3 min-h-[180px] h-[calc(100vh-180px)] overflow-y-auto transition-colors duration-200 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400 ${
-                        snapshot.isDraggingOver ? 'bg-yellow-50/50' : 'bg-gray-50/30'
-                      }`}
-                    >
-                      {getFilteredTasksByColumn('unassigned').map((task, index) => (
-                        <Draggable key={task.id} draggableId={task.id} index={index}>
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              className={`bg-white/95 backdrop-blur-sm border border-gray-200/50 rounded-xl p-3 mb-2 shadow-sm transition-all duration-200 hover:shadow-md group ${
-                                snapshot.isDragging ? 'shadow-lg rotate-1 scale-105' : 'hover:scale-[1.02]'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <h4 className="font-medium text-gray-800 text-xs mb-1 leading-tight">{task.title}</h4>
-                                  {task.description && (
-                                    <p className="text-gray-500 text-xs mb-2 leading-relaxed">{task.description}</p>
-                                  )}
-                                  <div className="flex items-center space-x-1">
-                                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium text-white ${getPriorityColor(task.priority)}`}>
-                                      {getPriorityLabel(task.priority)}
+              </div>
+              
+              <Droppable droppableId="unassigned">
+                {(provided, snapshot) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className={`p-3 min-h-[180px] h-[calc(100vh-180px)] overflow-y-auto transition-colors duration-200 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400 ${
+                      snapshot.isDraggingOver ? 'bg-yellow-50/50' : 'bg-gray-50/30'
+                    }`}
+                  >
+                    {getFilteredTasksByColumn('unassigned').map((task, index) => (
+                      <Draggable key={task.id} draggableId={task.id.toString()} index={index}>
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className={`bg-white/95 backdrop-blur-sm border border-gray-200/50 rounded-xl p-3 mb-2 shadow-sm transition-all duration-200 hover:shadow-md group ${
+                              snapshot.isDragging ? 'shadow-lg rotate-1 scale-105' : 'hover:scale-[1.02]'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <h4 className="font-medium text-gray-800 text-xs mb-1 leading-tight">{task.title}</h4>
+                                {task.description && (
+                                  <p className="text-gray-500 text-xs mb-2 leading-relaxed">{task.description}</p>
+                                )}
+                                <div className="flex items-center space-x-1">
+                                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium text-white ${getPriorityColor(task.priority)}`}>
+                                    {getPriorityLabel(task.priority)}
+                                  </span>
+                                  {task.due_date && (
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                      isOverdue(task.due_date) ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+                                    }`}>
+                                      {new Date(task.due_date).toLocaleDateString()}
                                     </span>
-                                    {task.due_date && (
-                                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                        isOverdue(task.due_date) ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
-                                      }`}>
-                                        {new Date(task.due_date).toLocaleDateString()}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex space-x-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button
-                                    onClick={() => openEditTask(task)}
-                                    className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all duration-200"
-                                  >
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
-                                  </button>
-                                  <button
-                                    onClick={() => deleteTask(task.id)}
-                                    className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all duration-200"
-                                  >
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                  </button>
+                                  )}
                                 </div>
                               </div>
+                              <div className="flex space-x-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => openEditTask(task)}
+                                  className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all duration-200"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => deleteTask(task.id)}
+                                  className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all duration-200"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
                             </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </div>
-            )}
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </div>
             
             {columns.map((column) => (
               <div 
@@ -1092,7 +1090,7 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
                     <div>
                       <h3 className="font-semibold text-gray-800 text-sm">{column.title}</h3>
                       <span className="text-gray-500 text-xs">
-                        {getFilteredTasksByColumn(column.id).length} tasks
+                        {getFilteredTasksByColumn(column.id.toString()).length} tasks
                       </span>
                     </div>
                     <div className="flex space-x-1">
@@ -1127,7 +1125,7 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
                         snapshot.isDraggingOver ? 'bg-gray-50/50' : 'bg-gray-50/30'
                       }`}
                     >
-                      {getFilteredTasksByColumn(column.id).map((task, index) => (
+                      {getFilteredTasksByColumn(column.id.toString()).map((task, index) => (
                         <Draggable key={task.id} draggableId={task.id.toString()} index={index}>
                           {(provided, snapshot) => (
                             <div
