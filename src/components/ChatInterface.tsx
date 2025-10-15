@@ -427,6 +427,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       const canCreateTask = conversationalResponse.canCreateTask || false
       const structuredTaskDetails = conversationalResponse.structuredTaskDetails || null
       const multipleTasks = conversationalResponse.multipleTasks || []
+      const goalDecomposition = conversationalResponse.goalDecomposition || null
       const displayMessage = conversationalResponse.message
       
       console.log('Conversational response:', conversationalResponse)
@@ -444,7 +445,8 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
         canCreateTask: canCreateTask,
         structuredTaskDetails: structuredTaskDetails,
         multipleTasks: multipleTasks,
-        tasks: aiTasks
+        tasks: aiTasks,
+        goalDecomposition: goalDecomposition
       }
 
       setMessages(prev => [...prev, assistantMessage])
@@ -1446,6 +1448,25 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
                 <div className="whitespace-pre-wrap">{message.content}</div>
               )}
               
+              {/* Goal Decomposition Indicator */}
+              {message.goalDecomposition && message.goalDecomposition.decomposed && (
+                <div className="mt-3 p-3 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg">
+                  <div className="flex items-start space-x-2">
+                    <div className="w-6 h-6 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                      🎯
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-semibold text-purple-800 mb-1">
+                        Goal Decomposed: "{message.goalDecomposition.original_goal}"
+                      </h4>
+                      <p className="text-xs text-purple-700">
+                        {message.goalDecomposition.explanation}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {/* Add Tasks Button for AI messages with task details */}
               {(() => {
                 const shouldShowButton = message.role === 'assistant' && 
@@ -1467,6 +1488,9 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
                         className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:opacity-50"
                       >
                         📋 Add All Tasks ({pendingTaskCreation.tasks.length} tasks)
+                        {message.goalDecomposition?.decomposed && (
+                          <span className="ml-1 text-xs opacity-90">🎯</span>
+                        )}
                       </button>
                       
                       {/* Individual task buttons for multiple tasks */}
@@ -1480,6 +1504,9 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
                               className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:opacity-50"
                             >
                               + {task.title}
+                              {message.goalDecomposition?.decomposed && (
+                                <span className="ml-1 text-xs opacity-90">🎯</span>
+                              )}
                             </button>
                           ))}
                         </div>

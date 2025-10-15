@@ -337,7 +337,7 @@ Respond with JSON:
   /**
    * Generate structured JSON response for task creation
    */
-  async generateStructuredResponse(userMessage: string, conversationHistory: any[] = []): Promise<{ message: string; user_messages?: string[]; tasks?: any[]; canCreateTask?: boolean; structuredTaskDetails?: any; multipleTasks?: any[] }> {
+  async generateStructuredResponse(userMessage: string, conversationHistory: any[] = []): Promise<{ message: string; user_messages?: string[]; tasks?: any[]; canCreateTask?: boolean; structuredTaskDetails?: any; multipleTasks?: any[]; goalDecomposition?: any }> {
     const prompt = `You are Zeno, an AI assistant that helps users brainstorm and clarify their tasks through conversation.
 
 Your goal is to understand the user's intent completely before creating any tasks. You can help create MULTIPLE tasks in one conversation.
@@ -354,13 +354,21 @@ Your role is to:
 2. Brainstorm ideas and suggestions to improve the task
 3. Help break down complex goals into actionable steps
 4. Identify if the user wants to create MULTIPLE tasks
-5. Only confirm task creation when you have ALL necessary details
+5. Detect LARGER GOALS and automatically decompose them into smaller tasks
+6. Only confirm task creation when you have ALL necessary details
+
+GOAL DECOMPOSITION: If the user mentions a large goal (like "launch a website", "learn Spanish", "get fit", "start a business"), automatically break it down into 3-5 smaller, actionable tasks that can be completed in 1-4 hours each.
 
 CRITICAL: Respond with ONLY the JSON object below. Do not include any other text, explanations, or conversation context.
 
 {
   "did_we_get_all_Details_to_craete_task": "yes/no",
   "user_message_response": "Your conversational response here - either brainstorming questions, clarifications, or confirmation that you'll create the task(s)",
+  "goal_decomposition": {
+    "original_goal": "The larger goal mentioned by the user",
+    "decomposed": true/false,
+    "explanation": "Brief explanation of how the goal was broken down"
+  },
   "structured_task_details": {
     "title": "Task title (if clear)",
     "description": "Detailed description (if available)",
@@ -403,6 +411,7 @@ Guidelines:
 - If you have all details needed, set it to "yes" and confirm you'll create the task(s)
 - If the user mentions multiple tasks/goals, populate "multiple_tasks" array with all tasks
 - If only one task, leave "multiple_tasks" empty and use "structured_task_details"
+- GOAL DECOMPOSITION: If user mentions a large goal, set "goal_decomposition.decomposed" to true and break it into 3-5 smaller tasks
 - Always populate task details with whatever information you have, even if incomplete
 - Keep responses conversational and helpful
 - Ask about: timeframe, priority, specific steps, resources needed, success criteria
@@ -471,7 +480,8 @@ RESPOND WITH ONLY THE JSON OBJECT. NO OTHER TEXT.`
             tasks: tasks,
             canCreateTask: parsed.did_we_get_all_Details_to_craete_task === 'yes',
             structuredTaskDetails: parsed.structured_task_details,
-            multipleTasks: parsed.multiple_tasks || []
+            multipleTasks: parsed.multiple_tasks || [],
+            goalDecomposition: parsed.goal_decomposition || null
           }
           console.log('Returning result:', result)
           return result
@@ -502,7 +512,8 @@ RESPOND WITH ONLY THE JSON OBJECT. NO OTHER TEXT.`
                 tasks: tasks,
                 canCreateTask: parsed.did_we_get_all_Details_to_craete_task === 'yes',
                 structuredTaskDetails: parsed.structured_task_details,
-                multipleTasks: parsed.multiple_tasks || []
+                multipleTasks: parsed.multiple_tasks || [],
+                goalDecomposition: parsed.goal_decomposition || null
               }
             }
           } catch (secondParseError) {
@@ -518,7 +529,8 @@ RESPOND WITH ONLY THE JSON OBJECT. NO OTHER TEXT.`
         tasks: [],
         canCreateTask: false,
         structuredTaskDetails: null,
-        multipleTasks: []
+        multipleTasks: [],
+        goalDecomposition: null
       }
       
     } catch (error) {
@@ -529,7 +541,8 @@ RESPOND WITH ONLY THE JSON OBJECT. NO OTHER TEXT.`
         tasks: [],
         canCreateTask: false,
         structuredTaskDetails: null,
-        multipleTasks: []
+        multipleTasks: [],
+        goalDecomposition: null
       }
     }
   }
