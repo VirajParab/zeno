@@ -350,7 +350,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
 
     // Create a new chat session if this is the first message or if we're starting a new chat
     let actualChatId = currentChatId
-    if (messages.length === 0 || currentChatId === 'new-chat') {
+    if (currentChatId === 'new-chat') {
       const title = generateChatTitle()
       // Create a new chat session for the first message
       const newChatId = `chat-${Date.now()}`
@@ -451,7 +451,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
           user_id: 'demo-user-123',
           role: 'assistant',
           content: displayMessage,
-          chat_session_id: currentChatId.toString(), // Use the actual chat session ID
+          chat_session_id: actualChatId.toString(), // Use the actual chat session ID
           model: 'gemini-2.5-flash',
           provider: selectedProvider,
           tokens: 0,
