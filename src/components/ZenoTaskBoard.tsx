@@ -44,6 +44,9 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
   const [hoveredColumn, setHoveredColumn] = useState<string | null>(null)
   const [showDailyPlan, setShowDailyPlan] = useState(false)
   
+  // Priority filter state
+  const [priorityFilter, setPriorityFilter] = useState<number | 'due' | null>(null)
+  
   // Notification permission
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default')
   const notificationInterval = useRef<NodeJS.Timeout | null>(null)
@@ -470,6 +473,59 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
     }
   }
 
+  // Priority filter helper functions
+  const getFilteredTasksByColumn = (columnId: string) => {
+    const columnTasks = getTasksByColumn(columnId)
+    if (priorityFilter === null) {
+      return columnTasks
+    }
+    if (priorityFilter === 'due') {
+      const today = new Date()
+      today.setHours(23, 59, 59, 999) // End of today
+      return columnTasks.filter(task => {
+        if (!task.due_date) return false
+        const dueDate = new Date(task.due_date)
+        return dueDate <= today
+      })
+    }
+    return columnTasks.filter(task => task.priority === priorityFilter)
+  }
+
+  const getPriorityCounts = () => {
+    const counts = { 1: 0, 2: 0, 3: 0 }
+    tasks.forEach(task => {
+      if (task.priority >= 1 && task.priority <= 3) {
+        counts[task.priority as keyof typeof counts]++
+      }
+    })
+    return counts
+  }
+
+  const getTotalTasksCount = () => {
+    return tasks.length
+  }
+
+  const getDueTasksCount = () => {
+    const today = new Date()
+    today.setHours(23, 59, 59, 999) // End of today
+    
+    return tasks.filter(task => {
+      if (!task.due_date) return false
+      const dueDate = new Date(task.due_date)
+      return dueDate <= today
+    }).length
+  }
+
+  const getOverdueTasksCount = () => {
+    const now = new Date()
+    
+    return tasks.filter(task => {
+      if (!task.due_date) return false
+      const dueDate = new Date(task.due_date)
+      return dueDate < now
+    }).length
+  }
+
   const isOverdue = (dueDate: string) => {
     return new Date(dueDate) < new Date()
   }
@@ -500,53 +556,157 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 overflow-hidden">
+      <div className="max-w-8xl mx-auto h-full flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">
+            <h1 className="text-2xl font-bold text-gray-800 mb-1">
               Zeno Task Board
             </h1>
-            <p className="text-gray-600 text-lg">Your AI coach for intentional living</p>
+            <p className="text-gray-500 text-sm">Your AI coach for intentional living</p>
           </div>
-          <div className="flex space-x-4">
+          <div className="flex space-x-3">
             <button
               onClick={() => setShowDailyPlan(true)}
-              className="px-6 py-3 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-300 flex items-center space-x-2 group"
+              className="px-4 py-2 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-white hover:shadow-md transition-all duration-300 flex items-center space-x-2 group text-sm"
             >
-              <svg className="w-5 h-5 group-hover:rotate-12 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 group-hover:rotate-12 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
               <span>Today's Plan</span>
             </button>
             <button
               onClick={() => setShowZenoChat(true)}
-              className="px-6 py-3 bg-blue-500 rounded-lg text-white hover:bg-blue-600 transition-all duration-300 flex items-center space-x-2 shadow-sm group"
+              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl text-white hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 flex items-center space-x-2 shadow-lg group text-sm"
             >
-              <svg className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
               <span>Chat with Zeno</span>
             </button>
             <button
               onClick={() => setShowColumnForm(true)}
-              className="px-6 py-3 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-300 flex items-center space-x-2 group"
+              className="px-4 py-2 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-white hover:shadow-md transition-all duration-300 flex items-center space-x-2 group text-sm"
             >
-              <svg className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
               <span>Add Column</span>
             </button>
             <button
               onClick={() => setShowTaskForm(true)}
-              className="px-6 py-3 bg-green-500 rounded-lg text-white hover:bg-green-600 transition-all duration-300 flex items-center space-x-2 shadow-sm group"
+              className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-600 rounded-xl text-white hover:from-emerald-600 hover:to-green-700 transition-all duration-300 flex items-center space-x-2 shadow-lg group text-sm"
             >
-              <svg className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               <span>Add Task</span>
             </button>
+          </div>
+        </div>
+
+        {/* Priority Filter Section */}
+        <div className="mb-4 bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-xl p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <h3 className="text-sm font-semibold text-gray-700">Filter by Priority:</h3>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setPriorityFilter(null)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                    priorityFilter === null
+                      ? 'bg-gray-800 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  All ({getTotalTasksCount()})
+                </button>
+                <button
+                  onClick={() => setPriorityFilter(1)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                    priorityFilter === 1
+                      ? 'bg-red-500 text-white shadow-md'
+                      : 'bg-red-100 text-red-700 hover:bg-red-200'
+                  }`}
+                >
+                  High ({getPriorityCounts()[1]})
+                </button>
+                <button
+                  onClick={() => setPriorityFilter(2)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                    priorityFilter === 2
+                      ? 'bg-yellow-500 text-white shadow-md'
+                      : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                  }`}
+                >
+                  Medium ({getPriorityCounts()[2]})
+                </button>
+                <button
+                  onClick={() => setPriorityFilter(3)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                    priorityFilter === 3
+                      ? 'bg-green-500 text-white shadow-md'
+                      : 'bg-green-100 text-green-700 hover:bg-green-200'
+                  }`}
+                >
+                  Low ({getPriorityCounts()[3]})
+                </button>
+                <button
+                  onClick={() => setPriorityFilter('due')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center space-x-1 ${
+                    priorityFilter === 'due'
+                      ? 'bg-orange-500 text-white shadow-md'
+                      : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                  }`}
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Due ({getDueTasksCount()})</span>
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              {/* Due Tasks Count */}
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1">
+                  <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-xs font-medium text-gray-600">Due:</span>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                    getOverdueTasksCount() > 0 
+                      ? 'bg-red-100 text-red-700' 
+                      : getDueTasksCount() > 0 
+                        ? 'bg-orange-100 text-orange-700'
+                        : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {getDueTasksCount()}
+                  </span>
+                </div>
+                {getOverdueTasksCount() > 0 && (
+                  <div className="flex items-center space-x-1">
+                    <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                    <span className="text-xs font-bold text-red-700">Overdue: {getOverdueTasksCount()}</span>
+                  </div>
+                )}
+              </div>
+              
+              {priorityFilter !== null && (
+                <button
+                  onClick={() => setPriorityFilter(null)}
+                  className="text-xs text-gray-500 hover:text-gray-700 flex items-center space-x-1"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span>Clear Filter</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -834,16 +994,16 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
 
         {/* Board */}
         <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart}>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 overflow-hidden">
             {/* Unassigned Tasks Column */}
-            {getTasksByColumn('unassigned').length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
-                <div className="p-6 rounded-t-xl bg-yellow-100">
+            {getFilteredTasksByColumn('unassigned').length > 0 && (
+              <div className="bg-white/90 backdrop-blur-sm border border-gray-200/50 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300">
+                <div className="p-4 rounded-t-2xl bg-gradient-to-r from-amber-100 to-yellow-100">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="font-bold text-gray-900 text-lg">Unassigned Tasks</h3>
-                      <span className="text-gray-600 text-sm">
-                        {getTasksByColumn('unassigned').length} tasks
+                      <h3 className="font-semibold text-gray-800 text-sm">Unassigned Tasks</h3>
+                      <span className="text-gray-500 text-xs">
+                        {getFilteredTasksByColumn('unassigned').length} tasks
                       </span>
                     </div>
                   </div>
@@ -854,33 +1014,33 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`p-4 min-h-[200px] transition-colors duration-200 ${
-                        snapshot.isDraggingOver ? 'bg-yellow-50' : 'bg-gray-50'
+                      className={`p-3 min-h-[180px] h-[calc(100vh-180px)] overflow-y-auto transition-colors duration-200 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400 ${
+                        snapshot.isDraggingOver ? 'bg-yellow-50/50' : 'bg-gray-50/30'
                       }`}
                     >
-                      {getTasksByColumn('unassigned').map((task, index) => (
+                      {getFilteredTasksByColumn('unassigned').map((task, index) => (
                         <Draggable key={task.id} draggableId={task.id} index={index}>
                           {(provided, snapshot) => (
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
-                              className={`bg-white border border-gray-200 rounded-lg p-4 mb-3 shadow-sm transition-all duration-200 ${
-                                snapshot.isDragging ? 'shadow-lg rotate-2' : 'hover:shadow-md'
+                              className={`bg-white/95 backdrop-blur-sm border border-gray-200/50 rounded-xl p-3 mb-2 shadow-sm transition-all duration-200 hover:shadow-md group ${
+                                snapshot.isDragging ? 'shadow-lg rotate-1 scale-105' : 'hover:scale-[1.02]'
                               }`}
                             >
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
-                                  <h4 className="font-medium text-gray-900 text-sm mb-1">{task.title}</h4>
+                                  <h4 className="font-medium text-gray-800 text-xs mb-1 leading-tight">{task.title}</h4>
                                   {task.description && (
-                                    <p className="text-gray-600 text-xs mb-2">{task.description}</p>
+                                    <p className="text-gray-500 text-xs mb-2 leading-relaxed">{task.description}</p>
                                   )}
-                                  <div className="flex items-center space-x-2">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium text-white ${getPriorityColor(task.priority)}`}>
+                                  <div className="flex items-center space-x-1">
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium text-white ${getPriorityColor(task.priority)}`}>
                                       {getPriorityLabel(task.priority)}
                                     </span>
                                     {task.due_date && (
-                                      <span className={`text-xs px-2 py-1 rounded-full ${
+                                      <span className={`text-xs px-2 py-0.5 rounded-full ${
                                         isOverdue(task.due_date) ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
                                       }`}>
                                         {new Date(task.due_date).toLocaleDateString()}
@@ -888,10 +1048,10 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
                                     )}
                                   </div>
                                 </div>
-                                <div className="flex space-x-1 ml-2">
+                                <div className="flex space-x-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <button
                                     onClick={() => openEditTask(task)}
-                                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                                    className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all duration-200"
                                   >
                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -899,7 +1059,7 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
                                   </button>
                                   <button
                                     onClick={() => deleteTask(task.id)}
-                                    className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                                    className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all duration-200"
                                   >
                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -921,35 +1081,35 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
             {columns.map((column) => (
               <div 
                 key={column.id} 
-                className={`bg-white border border-gray-200 rounded-xl shadow-sm transition-all duration-300 ${
-                  hoveredColumn === column.id ? 'shadow-md scale-105' : ''
+                className={`bg-white/90 backdrop-blur-sm border border-gray-200/50 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 ${
+                  hoveredColumn === column.id ? 'shadow-xl scale-[1.02]' : ''
                 }`}
                 onMouseEnter={() => setHoveredColumn(column.id)}
                 onMouseLeave={() => setHoveredColumn(null)}
               >
-                <div className={`p-6 rounded-t-xl ${column.color}`}>
+                <div className={`p-4 rounded-t-2xl ${column.color}`}>
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="font-bold text-gray-900 text-lg">{column.title}</h3>
-                      <span className="text-gray-600 text-sm">
-                        {getTasksByColumn(column.id).length} tasks
+                      <h3 className="font-semibold text-gray-800 text-sm">{column.title}</h3>
+                      <span className="text-gray-500 text-xs">
+                        {getFilteredTasksByColumn(column.id).length} tasks
                       </span>
                     </div>
-                    <div className="flex space-x-2">
+                    <div className="flex space-x-1">
                       <button
                         onClick={() => openEditColumn(column)}
-                        className="p-2 bg-white rounded-lg text-gray-600 hover:bg-gray-50 transition-all duration-300"
+                        className="p-1.5 bg-white/80 backdrop-blur-sm rounded-lg text-gray-500 hover:bg-white hover:text-gray-700 transition-all duration-300"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
                       {columns.length > 1 && (
                         <button
                           onClick={() => deleteColumn(column.id)}
-                          className="p-2 bg-white rounded-lg text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all duration-300"
+                          className="p-1.5 bg-white/80 backdrop-blur-sm rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all duration-300"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
@@ -963,39 +1123,39 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`p-6 min-h-96 transition-all duration-300 ${
-                        snapshot.isDraggingOver ? 'bg-gray-50' : ''
+                      className={`p-3 min-h-[180px] h-[calc(100vh-180px)] overflow-y-auto transition-colors duration-200 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400 ${
+                        snapshot.isDraggingOver ? 'bg-gray-50/50' : 'bg-gray-50/30'
                       }`}
                     >
-                      {getTasksByColumn(column.id).map((task, index) => (
+                      {getFilteredTasksByColumn(column.id).map((task, index) => (
                         <Draggable key={task.id} draggableId={task.id.toString()} index={index}>
                           {(provided, snapshot) => (
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
-                              className={`mb-4 bg-white border border-gray-200 rounded-lg p-4 transition-all duration-300 hover:shadow-md group ${
-                                snapshot.isDragging ? 'shadow-lg rotate-2 scale-105' : 'hover:scale-105'
+                              className={`mb-3 bg-white/95 backdrop-blur-sm border border-gray-200/50 rounded-xl p-3 transition-all duration-300 hover:shadow-md group ${
+                                snapshot.isDragging ? 'shadow-lg rotate-1 scale-105' : 'hover:scale-[1.02]'
                               }`}
                             >
-                              <div className="flex items-start justify-between mb-3">
-                                <h4 className="font-semibold text-gray-900 flex-1 text-lg">
+                              <div className="flex items-start justify-between mb-2">
+                                <h4 className="font-medium text-gray-800 flex-1 text-xs leading-tight">
                                   {task.title}
                                 </h4>
-                                <div className="flex space-x-2 ml-3">
+                                <div className="flex space-x-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <button
                                     onClick={() => openEditTask(task)}
-                                    className="p-1.5 bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-200 transition-all duration-300 opacity-0 group-hover:opacity-100"
+                                    className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all duration-200"
                                   >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                   </button>
                                   <button
                                     onClick={() => deleteTask(task.id)}
-                                    className="p-1.5 bg-gray-100 rounded-lg text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-300 opacity-0 group-hover:opacity-100"
+                                    className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all duration-200"
                                   >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                     </svg>
                                   </button>
@@ -1003,21 +1163,20 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
                               </div>
                               
                               {task.description && (
-                                <p className="text-gray-600 text-sm mb-4 leading-relaxed">
+                                <p className="text-gray-500 text-xs mb-2 leading-relaxed">
                                   {task.description}
                                 </p>
                               )}
                               
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center space-x-3">
-                                  <div className={`w-3 h-3 rounded-full ${getPriorityColor(task.priority)}`}></div>
-                                  <span className="text-gray-500 text-sm font-medium">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2">
+                                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium text-white ${getPriorityColor(task.priority)}`}>
                                     {getPriorityLabel(task.priority)}
                                   </span>
                                 </div>
                                 {task.due_date && (
-                                  <span className={`text-sm font-medium ${
-                                    isOverdue(task.due_date) ? 'text-red-500' : 'text-gray-500'
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                    isOverdue(task.due_date) ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
                                   }`}>
                                     {new Date(task.due_date).toLocaleDateString()}
                                   </span>
@@ -1025,8 +1184,8 @@ const ZenoTaskBoard = ({ coachingService }: ZenoTaskBoardProps) => {
                               </div>
                               
                               {task.reminder_date && (
-                                <div className="flex items-center space-x-2 text-blue-500 text-sm">
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <div className="flex items-center space-x-1 text-blue-500 text-xs mt-1">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5-5-5h5v-5a7.5 7.5 0 1 0-15 0v5h5l-5 5-5-5h5v-5a7.5 7.5 0 1 0 15 0v5z" />
                                   </svg>
                                   <span>{new Date(task.reminder_date).toLocaleString()}</span>
