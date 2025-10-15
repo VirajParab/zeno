@@ -337,32 +337,46 @@ Respond with JSON:
   /**
    * Generate structured JSON response for task creation
    */
-  private async generateStructuredResponse(userMessage: string): Promise<{ message: string; user_messages?: string[]; tasks?: any[] }> {
+  async generateStructuredResponse(userMessage: string): Promise<{ message: string; user_messages?: string[]; tasks?: any[]; canCreateTask?: boolean; structuredTaskDetails?: any }> {
     const prompt = `
-STRICT INSTRUCTIONS: You MUST respond ONLY with valid JSON. No text explanations, no markdown, no detailed descriptions.
+You are Zeno, an AI assistant that helps users brainstorm and clarify their tasks through conversation. Your goal is to understand the user's intent completely before creating any tasks.
 
 User Message: "${userMessage}"
 
-Extract tasks from this message and respond with this EXACT JSON format:
+Your role is to:
+1. Ask clarifying questions if the task details are unclear
+2. Brainstorm ideas and suggestions to improve the task
+3. Help break down complex goals into actionable steps
+4. Only confirm task creation when you have ALL necessary details
+
+Respond with this EXACT JSON format:
 {
-  "message": "Here are your tasks:",
-  "tasks": [
-    {
-      "title": "Task Name",
-      "description": "Brief description",
-      "estimatedDuration": 120,
-      "priority": 1,
-      "category": "work"
-    }
-  ]
+  "did_we_get_all_Details_to_craete_task": "yes/no",
+  "user_message_response": "Your conversational response here - either brainstorming questions, clarifications, or confirmation that you'll create the task",
+  "structured_task_details": {
+    "title": "Task title (if clear)",
+    "description": "Detailed description (if available)",
+    "estimatedDuration": 120,
+    "priority": 1,
+    "category": "work",
+    "timeframe": "when to complete",
+    "specific_steps": ["step 1", "step 2"],
+    "resources_needed": ["resource 1", "resource 2"],
+    "success_criteria": "how to know it's done"
+  }
 }
 
-RULES:
+Guidelines:
+- If task details are vague or incomplete, set "did_we_get_all_Details_to_craete_task" to "no" and ask specific questions
+- If you have all details needed, set it to "yes" and confirm you'll create the task
+- Always populate "structured_task_details" with whatever information you have, even if incomplete
+- Keep responses conversational and helpful
+- Ask about: timeframe, priority, specific steps, resources needed, success criteria
+- Brainstorm improvements or alternatives when appropriate
+- Use minimum words but be clear and actionable
 - estimatedDuration: time in minutes (60 = 1 hour, 120 = 2 hours)
 - priority: 1=High, 2=Medium, 3=Low
 - category: "work", "health", "learning", "finance", "personal"
-- Extract ALL tasks mentioned in the user message
-- Convert time estimates to minutes
 - Respond ONLY with valid JSON, nothing else
 `
 
@@ -385,12 +399,14 @@ RULES:
         const parsed = JSON.parse(response.content)
         console.log('Parsed JSON:', parsed)
         
-        if (parsed.tasks && Array.isArray(parsed.tasks) && parsed.tasks.length > 0) {
-          console.log('Found tasks in AI response:', parsed.tasks)
+        if (parsed.did_we_get_all_Details_to_craete_task && parsed.user_message_response) {
+          console.log('Found valid AI response:', parsed)
           return {
-            message: parsed.message,
+            message: parsed.user_message_response,
             user_messages: [userMessage], // Include user message
-            tasks: parsed.tasks
+            tasks: parsed.did_we_get_all_Details_to_craete_task === 'yes' ? [parsed.structured_task_details] : [],
+            canCreateTask: parsed.did_we_get_all_Details_to_craete_task === 'yes',
+            structuredTaskDetails: parsed.structured_task_details
           }
         }
       } catch (parseError) {
@@ -402,11 +418,13 @@ RULES:
         if (jsonMatch) {
           try {
             const parsed = JSON.parse(jsonMatch[0])
-            if (parsed.tasks && Array.isArray(parsed.tasks) && parsed.tasks.length > 0) {
+            if (parsed.did_we_get_all_Details_to_craete_task && parsed.user_message_response) {
               return {
-                message: parsed.message,
+                message: parsed.user_message_response,
                 user_messages: [userMessage], // Include user message
-                tasks: parsed.tasks
+                tasks: parsed.did_we_get_all_Details_to_craete_task === 'yes' ? [parsed.structured_task_details] : [],
+                canCreateTask: parsed.did_we_get_all_Details_to_craete_task === 'yes',
+                structuredTaskDetails: parsed.structured_task_details
               }
             }
           } catch (secondParseError) {
@@ -417,15 +435,21 @@ RULES:
 
       // If no valid JSON found, return empty
       return { 
-        message: "I couldn't extract tasks from your message. Please try again.",
-        user_messages: [userMessage] // Include user message
+        message: "I couldn't understand your message clearly. Could you please provide more details about what you'd like to work on?",
+        user_messages: [userMessage], // Include user message
+        tasks: [],
+        canCreateTask: false,
+        structuredTaskDetails: null
       }
       
     } catch (error) {
       console.error('Error generating structured response:', error)
       return { 
         message: "I'm having trouble processing that right now. Could you try rephrasing your response?",
-        user_messages: [userMessage] // Include user message
+        user_messages: [userMessage], // Include user message
+        tasks: [],
+        canCreateTask: false,
+        structuredTaskDetails: null
       }
     }
   }

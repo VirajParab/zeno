@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useDatabase } from '../services/database/DatabaseContext'
 import { AIService } from '../services/ai/aiService'
+import { ConversationalInputService } from '../services/ai/conversationalInputService'
 import { AIModelConfig, AIProvider, AVAILABLE_MODELS } from '../services/ai/types'
 import { Task, ChatSession } from '../services/database/types'
 import ReactMarkdown from 'react-markdown'
@@ -217,78 +218,30 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     }
 
     try {
-      const aiService = new AIService(database, 'demo-user-123')
-      
       // Use conversational AI service for better task extraction
-      const conversationalResponse = await aiService.chatWithAI(
-        `Extract tasks from this message and respond with JSON format: "${inputMessage}"`,
-        {
-          provider: 'gemini',
-          modelId: 'gemini-2.5-flash',
-          temperature: 0.3,
-          maxTokens: 1000
-        },
-        'You are a JSON-only response generator for task creation.',
-        currentChatId // Pass the current chat session ID
-      )
+      const aiService = new AIService(database, 'demo-user-123')
+      const conversationalService = new ConversationalInputService(aiService, database, 'demo-user-123')
+      const conversationalResponse = await conversationalService.generateStructuredResponse(inputMessage)
       
-      // Try to parse JSON response for tasks
-      let aiTasks: any[] = []
-      try {
-        const parsed = JSON.parse(conversationalResponse.content)
-        console.log('Parsed AI response:', parsed)
-        if (parsed.tasks && Array.isArray(parsed.tasks)) {
-          // Transform AI response format to our expected format
-          aiTasks = parsed.tasks.map((task: any) => {
-            const transformedTask = {
-              title: task.title,
-              description: task.goal || task.description || task.title,
-              estimatedDuration: parseTimeToMinutes(task.overall_estimated_time || task.estimatedDuration),
-              priority: getPriorityFromStatus(task.status) || 2,
-              category: getCategoryFromTitle(task.title) || 'personal'
-            }
-            console.log('Transformed task:', transformedTask)
-            return transformedTask
-          })
-        }
-      } catch (parseError) {
-        console.log('Direct JSON parsing failed, trying regex extraction')
-        // Try to extract JSON from wrapped response
-        const jsonMatch = conversationalResponse.content.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          try {
-            const parsed = JSON.parse(jsonMatch[0])
-            console.log('Extracted JSON:', parsed)
-            if (parsed.tasks && Array.isArray(parsed.tasks)) {
-              // Transform AI response format to our expected format
-              aiTasks = parsed.tasks.map((task: any) => {
-                const transformedTask = {
-                  title: task.title,
-                  description: task.goal || task.description || task.title,
-                  estimatedDuration: parseTimeToMinutes(task.overall_estimated_time || task.estimatedDuration),
-                  priority: getPriorityFromStatus(task.status) || 2,
-                  category: getCategoryFromTitle(task.title) || 'personal'
-                }
-                console.log('Transformed task:', transformedTask)
-                return transformedTask
-              })
-            }
-          } catch (secondParseError) {
-            console.error('JSON parsing failed:', secondParseError)
-          }
-        }
-      }
+      // Extract data from conversational response
+      const aiTasks = conversationalResponse.tasks || []
+      const canCreateTask = conversationalResponse.canCreateTask || false
+      const structuredTaskDetails = conversationalResponse.structuredTaskDetails || null
+      const displayMessage = conversationalResponse.message
       
-      console.log('Final aiTasks:', aiTasks)
+      console.log('Conversational response:', conversationalResponse)
+      console.log('Can create task:', canCreateTask)
       
       const assistantMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: conversationalResponse.content,
+        content: displayMessage, // Show only the user_message_response
         timestamp: new Date().toISOString(),
-        model: conversationalResponse.model,
-        tokens: conversationalResponse.tokens,
-        cost: conversationalResponse.cost
+        model: 'gemini-2.5-flash',
+        tokens: 0,
+        cost: 0,
+        canCreateTask: canCreateTask,
+        structuredTaskDetails: structuredTaskDetails
       }
 
       setMessages(prev => [...prev, assistantMessage])
@@ -313,8 +266,8 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
         )
       }
       
-      // If AI provided tasks, set up pending task creation
-      if (aiTasks.length > 0) {
+      // If AI provided tasks and can create task, set up pending task creation
+      if (aiTasks.length > 0 && canCreateTask) {
         setPendingTaskCreation({
           messageId: assistantMessage.id,
           tasks: aiTasks
