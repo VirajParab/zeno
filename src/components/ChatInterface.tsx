@@ -414,12 +414,19 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       // Use conversational AI service for better task extraction
       const aiService = new AIService(database, 'demo-user-123')
       const conversationalService = new ConversationalInputService(aiService, database, 'demo-user-123')
-      const conversationalResponse = await conversationalService.generateStructuredResponse(inputMessage)
+      // Pass conversation history for context
+      const conversationHistory = messages.slice(-5).map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }))
+      
+      const conversationalResponse = await conversationalService.generateStructuredResponse(inputMessage, conversationHistory)
       
       // Extract data from conversational response
       const aiTasks = conversationalResponse.tasks || []
       const canCreateTask = conversationalResponse.canCreateTask || false
       const structuredTaskDetails = conversationalResponse.structuredTaskDetails || null
+      const multipleTasks = conversationalResponse.multipleTasks || []
       const displayMessage = conversationalResponse.message
       
       console.log('Conversational response:', conversationalResponse)
@@ -435,7 +442,9 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
         tokens: 0,
         cost: 0,
         canCreateTask: canCreateTask,
-        structuredTaskDetails: structuredTaskDetails
+        structuredTaskDetails: structuredTaskDetails,
+        multipleTasks: multipleTasks,
+        tasks: aiTasks
       }
 
       setMessages(prev => [...prev, assistantMessage])
@@ -927,6 +936,140 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     }
   }
 
+  const createSingleTask = async (taskData: any, messageId: string) => {
+    if (!database) return
+
+    console.log('Creating single task:', taskData)
+    setIsLoading(true)
+    try {
+      // Get the first available column (Focus Tasks) or create a default one
+      let defaultColumnId = 'default'
+      try {
+        const columns = await database.getColumns()
+        if (columns.length > 0) {
+          defaultColumnId = columns[0].id // Use the first column (Focus Tasks)
+        } else {
+          // Create a default column if none exist
+          const defaultColumn = await database.createColumn({
+            user_id: 'demo-user-123',
+            title: 'Focus Tasks',
+            color: 'bg-blue-100',
+            position: 0
+          })
+          defaultColumnId = defaultColumn.id
+        }
+      } catch (error) {
+        console.error('Error getting columns:', error)
+      }
+      
+      const task = await database.createTask({
+        user_id: 'demo-user-123',
+        title: taskData.title,
+        description: taskData.description,
+        status: 'todo',
+        priority: taskData.priority,
+        due_date: new Date().toISOString(),
+        column_id: defaultColumnId,
+        position: 0
+      })
+      console.log('Created single task:', task)
+
+      const successMessage = {
+        id: `msg-${Date.now()}`,
+        role: 'assistant',
+        content: `✅ Great! I've created "${taskData.title}" for you. You can manage it in the Task Board!`,
+        timestamp: new Date().toISOString()
+      }
+      setMessages(prev => [...prev, successMessage])
+
+      // Store success message in database
+      try {
+        await database.createMessage({
+          user_id: 'demo-user-123',
+          role: 'assistant',
+          content: successMessage.content,
+          chat_session_id: currentChatId.toString(),
+          model: 'gemini-2.5-flash',
+          provider: selectedProvider,
+          tokens: 0,
+          cost: 0
+        })
+        
+        // Update chat message count
+        if (currentChatId !== 'new-chat') {
+          const existingSession = await database.getChatSession(currentChatId)
+          if (existingSession) {
+            const actualMessages = await database.getMessagesByChatSession(currentChatId)
+            await database.updateChatSession(currentChatId, {
+              last_message_at: new Date().toISOString(),
+              message_count: actualMessages.length
+            })
+            await loadChatSessions()
+          }
+        }
+      } catch (error) {
+        console.error('Failed to store success message:', error)
+      }
+
+      await loadTasks()
+      
+      // Update pending task creation to remove the created task
+      if (pendingTaskCreation && pendingTaskCreation.messageId === messageId) {
+        const remainingTasks = pendingTaskCreation.tasks.filter(t => t.title !== taskData.title)
+        if (remainingTasks.length === 0) {
+          setPendingTaskCreation(null)
+        } else {
+          setPendingTaskCreation({
+            ...pendingTaskCreation,
+            tasks: remainingTasks
+          })
+        }
+      }
+      
+    } catch (error) {
+      console.error('Failed to create single task:', error)
+      
+      const errorMessage = {
+        id: `msg-${Date.now()}`,
+        role: 'assistant',
+        content: `I'm sorry, I couldn't create "${taskData.title}" right now. Please try again.`,
+        timestamp: new Date().toISOString()
+      }
+      setMessages(prev => [...prev, errorMessage])
+
+      // Store error message in database
+      try {
+        await database.createMessage({
+          user_id: 'demo-user-123',
+          role: 'assistant',
+          content: errorMessage.content,
+          chat_session_id: currentChatId.toString(),
+          model: 'gemini-2.5-flash',
+          provider: selectedProvider,
+          tokens: 0,
+          cost: 0
+        })
+        
+        // Update chat message count
+        if (currentChatId !== 'new-chat') {
+          const existingSession = await database.getChatSession(currentChatId)
+          if (existingSession) {
+            const actualMessages = await database.getMessagesByChatSession(currentChatId)
+            await database.updateChatSession(currentChatId, {
+              last_message_at: new Date().toISOString(),
+              message_count: actualMessages.length
+            })
+            await loadChatSessions()
+          }
+        }
+      } catch (error) {
+        console.error('Failed to store task creation error message:', error)
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className="h-screen flex bg-gray-50">
       {/* Chat Sidebar */}
@@ -1317,13 +1460,31 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
                 })
                 return shouldShowButton && (
                   <div className="mt-2 pt-2 border-t border-gray-200">
-                    <button
-                      onClick={createTasksFromPending}
-                      disabled={isLoading}
-                      className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:opacity-50"
-                    >
-                      📋 Add Tasks to Task List ({pendingTaskCreation.tasks.length} tasks)
-                    </button>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        onClick={createTasksFromPending}
+                        disabled={isLoading}
+                        className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:opacity-50"
+                      >
+                        📋 Add All Tasks ({pendingTaskCreation.tasks.length} tasks)
+                      </button>
+                      
+                      {/* Individual task buttons for multiple tasks */}
+                      {pendingTaskCreation.tasks.length > 1 && (
+                        <div className="flex flex-wrap gap-1">
+                          {pendingTaskCreation.tasks.map((task, index) => (
+                            <button
+                              key={index}
+                              onClick={() => createSingleTask(task, message.id)}
+                              disabled={isLoading}
+                              className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:opacity-50"
+                            >
+                              + {task.title}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )
               })()}

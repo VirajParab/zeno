@@ -337,22 +337,30 @@ Respond with JSON:
   /**
    * Generate structured JSON response for task creation
    */
-  async generateStructuredResponse(userMessage: string): Promise<{ message: string; user_messages?: string[]; tasks?: any[]; canCreateTask?: boolean; structuredTaskDetails?: any }> {
+  async generateStructuredResponse(userMessage: string, conversationHistory: any[] = []): Promise<{ message: string; user_messages?: string[]; tasks?: any[]; canCreateTask?: boolean; structuredTaskDetails?: any; multipleTasks?: any[] }> {
     const prompt = `You are Zeno, an AI assistant that helps users brainstorm and clarify their tasks through conversation.
 
+Your goal is to understand the user's intent completely before creating any tasks. You can help create MULTIPLE tasks in one conversation.
+
 User Message: "${userMessage}"
+
+${conversationHistory.length > 0 ? `
+Recent Conversation Context:
+${conversationHistory.slice(-3).map((msg, i) => `${i + 1}. ${msg.role}: ${msg.content}`).join('\n')}
+` : ''}
 
 Your role is to:
 1. Ask clarifying questions if the task details are unclear
 2. Brainstorm ideas and suggestions to improve the task
 3. Help break down complex goals into actionable steps
-4. Only confirm task creation when you have ALL necessary details
+4. Identify if the user wants to create MULTIPLE tasks
+5. Only confirm task creation when you have ALL necessary details
 
 CRITICAL: Respond with ONLY the JSON object below. Do not include any other text, explanations, or conversation context.
 
 {
   "did_we_get_all_Details_to_craete_task": "yes/no",
-  "user_message_response": "Your conversational response here - either brainstorming questions, clarifications, or confirmation that you'll create the task",
+  "user_message_response": "Your conversational response here - either brainstorming questions, clarifications, or confirmation that you'll create the task(s)",
   "structured_task_details": {
     "title": "Task title (if clear)",
     "description": "Detailed description (if available)",
@@ -363,13 +371,39 @@ CRITICAL: Respond with ONLY the JSON object below. Do not include any other text
     "specific_steps": ["step 1", "step 2"],
     "resources_needed": ["resource 1", "resource 2"],
     "success_criteria": "how to know it's done"
-  }
+  },
+  "multiple_tasks": [
+    {
+      "title": "First task title",
+      "description": "First task description",
+      "estimatedDuration": 60,
+      "priority": 1,
+      "category": "work",
+      "timeframe": "today",
+      "specific_steps": ["step 1", "step 2"],
+      "resources_needed": ["resource 1"],
+      "success_criteria": "completion criteria"
+    },
+    {
+      "title": "Second task title",
+      "description": "Second task description", 
+      "estimatedDuration": 90,
+      "priority": 2,
+      "category": "personal",
+      "timeframe": "this week",
+      "specific_steps": ["step 1", "step 2"],
+      "resources_needed": ["resource 2"],
+      "success_criteria": "completion criteria"
+    }
+  ]
 }
 
 Guidelines:
 - If task details are vague or incomplete, set "did_we_get_all_Details_to_craete_task" to "no" and ask specific questions
-- If you have all details needed, set it to "yes" and confirm you'll create the task
-- Always populate "structured_task_details" with whatever information you have, even if incomplete
+- If you have all details needed, set it to "yes" and confirm you'll create the task(s)
+- If the user mentions multiple tasks/goals, populate "multiple_tasks" array with all tasks
+- If only one task, leave "multiple_tasks" empty and use "structured_task_details"
+- Always populate task details with whatever information you have, even if incomplete
 - Keep responses conversational and helpful
 - Ask about: timeframe, priority, specific steps, resources needed, success criteria
 - Brainstorm improvements or alternatives when appropriate
@@ -420,12 +454,24 @@ RESPOND WITH ONLY THE JSON OBJECT. NO OTHER TEXT.`
         
         if (parsed.did_we_get_all_Details_to_craete_task && parsed.user_message_response) {
           console.log('Found valid AI response:', parsed)
+          
+          // Handle multiple tasks
+          let tasks = []
+          if (parsed.did_we_get_all_Details_to_craete_task === 'yes') {
+            if (parsed.multiple_tasks && parsed.multiple_tasks.length > 0) {
+              tasks = parsed.multiple_tasks
+            } else if (parsed.structured_task_details) {
+              tasks = [parsed.structured_task_details]
+            }
+          }
+          
           const result = {
             message: parsed.user_message_response,
             user_messages: [userMessage], // Include user message
-            tasks: parsed.did_we_get_all_Details_to_craete_task === 'yes' ? [parsed.structured_task_details] : [],
+            tasks: tasks,
             canCreateTask: parsed.did_we_get_all_Details_to_craete_task === 'yes',
-            structuredTaskDetails: parsed.structured_task_details
+            structuredTaskDetails: parsed.structured_task_details,
+            multipleTasks: parsed.multiple_tasks || []
           }
           console.log('Returning result:', result)
           return result
@@ -440,12 +486,23 @@ RESPOND WITH ONLY THE JSON OBJECT. NO OTHER TEXT.`
           try {
             const parsed = JSON.parse(jsonMatch[0])
             if (parsed.did_we_get_all_Details_to_craete_task && parsed.user_message_response) {
+              // Handle multiple tasks
+              let tasks = []
+              if (parsed.did_we_get_all_Details_to_craete_task === 'yes') {
+                if (parsed.multiple_tasks && parsed.multiple_tasks.length > 0) {
+                  tasks = parsed.multiple_tasks
+                } else if (parsed.structured_task_details) {
+                  tasks = [parsed.structured_task_details]
+                }
+              }
+              
               return {
                 message: parsed.user_message_response,
                 user_messages: [userMessage], // Include user message
-                tasks: parsed.did_we_get_all_Details_to_craete_task === 'yes' ? [parsed.structured_task_details] : [],
+                tasks: tasks,
                 canCreateTask: parsed.did_we_get_all_Details_to_craete_task === 'yes',
-                structuredTaskDetails: parsed.structured_task_details
+                structuredTaskDetails: parsed.structured_task_details,
+                multipleTasks: parsed.multiple_tasks || []
               }
             }
           } catch (secondParseError) {
@@ -460,7 +517,8 @@ RESPOND WITH ONLY THE JSON OBJECT. NO OTHER TEXT.`
         user_messages: [userMessage], // Include user message
         tasks: [],
         canCreateTask: false,
-        structuredTaskDetails: null
+        structuredTaskDetails: null,
+        multipleTasks: []
       }
       
     } catch (error) {
@@ -470,7 +528,8 @@ RESPOND WITH ONLY THE JSON OBJECT. NO OTHER TEXT.`
         user_messages: [userMessage], // Include user message
         tasks: [],
         canCreateTask: false,
-        structuredTaskDetails: null
+        structuredTaskDetails: null,
+        multipleTasks: []
       }
     }
   }
