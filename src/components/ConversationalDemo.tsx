@@ -188,55 +188,58 @@ const ConversationalDemo: React.FC<ConversationalDemoProps> = ({ userProfile }) 
           </div>
         )}
 
-        {/* Clarification Questions */}
+        {/* Clarification Questions - SHOW ONLY 1 */}
         {pendingQuestions.length > 0 && (
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <h4 className="text-sm font-medium text-blue-800 mb-2">❓ Quick Questions</h4>
-            <div className="space-y-2">
-              {pendingQuestions.slice(0, 2).map((question) => (
-                <div key={question.id} className="text-sm">
-                  <p className="text-blue-700 mb-2">{question.question}</p>
-                  {question.expectedAnswerType === 'choice' && question.options ? (
-                    <div className="flex flex-wrap gap-1">
-                      {question.options.map((option, index) => (
+            <h4 className="text-sm font-medium text-blue-800 mb-2">❓ Quick Question</h4>
+            <div className="text-sm">
+              {(() => {
+                const question = pendingQuestions[0] // Show only the first question
+                return (
+                  <div>
+                    <p className="text-blue-700 mb-2">{question.question}</p>
+                    {question.expectedAnswerType === 'choice' && question.options ? (
+                      <div className="flex flex-wrap gap-1">
+                        {question.options.map((option, index) => (
+                          <button
+                            key={index}
+                            onClick={() => answerQuestion(question.id, option)}
+                            className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex space-x-2">
+                        <input
+                          type="text"
+                          placeholder="Your answer..."
+                          className="flex-1 px-2 py-1 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              answerQuestion(question.id, e.currentTarget.value)
+                              e.currentTarget.value = ''
+                            }
+                          }}
+                        />
                         <button
-                          key={index}
-                          onClick={() => answerQuestion(question.id, option)}
-                          className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                          onClick={(e) => {
+                            const input = e.currentTarget.previousElementSibling as HTMLInputElement
+                            if (input.value.trim()) {
+                              answerQuestion(question.id, input.value.trim())
+                              input.value = ''
+                            }
+                          }}
+                          className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                         >
-                          {option}
+                          Send
                         </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex space-x-2">
-                      <input
-                        type="text"
-                        placeholder="Your answer..."
-                        className="flex-1 px-2 py-1 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            answerQuestion(question.id, e.currentTarget.value)
-                            e.currentTarget.value = ''
-                          }
-                        }}
-                      />
-                      <button
-                        onClick={(e) => {
-                          const input = e.currentTarget.previousElementSibling as HTMLInputElement
-                          if (input.value.trim()) {
-                            answerQuestion(question.id, input.value.trim())
-                            input.value = ''
-                          }
-                        }}
-                        className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                      >
-                        Send
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
           </div>
         )}

@@ -2,7 +2,16 @@ import { useState, useEffect, useRef } from 'react'
 import { useDatabase } from '../services/database/DatabaseContext'
 import { AIService } from '../services/ai/aiService'
 import { AIModelConfig, AIProvider, AVAILABLE_MODELS } from '../services/ai/types'
+import { Task } from '../services/database/types'
 import ReactMarkdown from 'react-markdown'
+
+interface ChatSession {
+  id: string
+  title: string
+  createdAt: string
+  lastMessageAt: string
+  messageCount: number
+}
 
 interface ChatInterfaceProps {
   // Remove modelConfig prop since we'll manage it internally
@@ -18,12 +27,24 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
   const [selectedModel, setSelectedModel] = useState<string>('gpt-4o-mini')
   const [showModelSelector, setShowModelSelector] = useState(false)
   const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [chatHistory, setChatHistory] = useState<ChatSession[]>([])
+  const [currentChatId, setCurrentChatId] = useState<string>('default')
+  const [showChatSidebar, setShowChatSidebar] = useState(true)
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [pendingTaskCreation, setPendingTaskCreation] = useState<{
+    messageId: string
+    tasks: any[]
+  } | null>(null)
+  const [tasksCreated, setTasksCreated] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     console.log('ChatInterface mounted, loading data...')
-    loadMessages()
+    // Clear all previous messages for fresh start
+    clearAllMessages()
     loadAPIKeys()
+    // Don't initialize sample chats - start fresh
+    loadTasks()
   }, [])
 
   useEffect(() => {
@@ -139,19 +160,22 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const loadMessages = async () => {
+  const clearAllMessages = async () => {
     if (!database) {
       console.log('No database available yet')
       return
     }
     
     try {
-      console.log('Loading messages...')
+      console.log('Clearing all messages for fresh start...')
       const allMessages = await database.getMessages()
-      console.log('Loaded messages:', allMessages)
-      setMessages(allMessages)
+      // Delete all messages to start fresh
+      for (const message of allMessages) {
+        await database.deleteMessage(message.id)
+      }
+      console.log('Cleared all messages')
     } catch (error) {
-      console.error('Failed to load messages:', error)
+      console.error('Failed to clear messages:', error)
     }
   }
 
@@ -169,21 +193,114 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     setInputMessage('')
     setIsLoading(true)
 
+    // Update chat title if this is the first user message
+    if (messages.length === 0) {
+      const title = generateChatTitle(inputMessage)
+      // Create a new chat session for the first message
+      const newChatId = `chat-${Date.now()}`
+      const newSession: ChatSession = {
+        id: newChatId,
+        title: title,
+        createdAt: new Date().toISOString(),
+        lastMessageAt: new Date().toISOString(),
+        messageCount: 1
+      }
+      setChatHistory(prev => [newSession, ...prev])
+      setCurrentChatId(newChatId)
+    }
+
     try {
       const aiService = new AIService(database, 'demo-user-123')
-      const response = await aiService.chatWithAI(inputMessage, getCurrentModelConfig())
+      
+      // Use conversational AI service for better task extraction
+      const conversationalResponse = await aiService.chatWithAI(
+        `Extract tasks from this message and respond with JSON format: "${inputMessage}"`,
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          temperature: 0.3,
+          maxTokens: 1000
+        },
+        'You are a JSON-only response generator for task creation.'
+      )
+      
+      // Try to parse JSON response for tasks
+      let aiTasks: any[] = []
+      try {
+        const parsed = JSON.parse(conversationalResponse.content)
+        console.log('Parsed AI response:', parsed)
+        if (parsed.tasks && Array.isArray(parsed.tasks)) {
+          // Transform AI response format to our expected format
+          aiTasks = parsed.tasks.map((task: any) => {
+            const transformedTask = {
+              title: task.title,
+              description: task.goal || task.description || task.title,
+              estimatedDuration: parseTimeToMinutes(task.overall_estimated_time || task.estimatedDuration),
+              priority: getPriorityFromStatus(task.status) || 2,
+              category: getCategoryFromTitle(task.title) || 'personal'
+            }
+            console.log('Transformed task:', transformedTask)
+            return transformedTask
+          })
+        }
+      } catch (parseError) {
+        console.log('Direct JSON parsing failed, trying regex extraction')
+        // Try to extract JSON from wrapped response
+        const jsonMatch = conversationalResponse.content.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          try {
+            const parsed = JSON.parse(jsonMatch[0])
+            console.log('Extracted JSON:', parsed)
+            if (parsed.tasks && Array.isArray(parsed.tasks)) {
+              // Transform AI response format to our expected format
+              aiTasks = parsed.tasks.map((task: any) => {
+                const transformedTask = {
+                  title: task.title,
+                  description: task.goal || task.description || task.title,
+                  estimatedDuration: parseTimeToMinutes(task.overall_estimated_time || task.estimatedDuration),
+                  priority: getPriorityFromStatus(task.status) || 2,
+                  category: getCategoryFromTitle(task.title) || 'personal'
+                }
+                console.log('Transformed task:', transformedTask)
+                return transformedTask
+              })
+            }
+          } catch (secondParseError) {
+            console.error('JSON parsing failed:', secondParseError)
+          }
+        }
+      }
+      
+      console.log('Final aiTasks:', aiTasks)
       
       const assistantMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: response.content,
+        content: conversationalResponse.content,
         timestamp: new Date().toISOString(),
-        model: response.model,
-        tokens: response.tokens,
-        cost: response.cost
+        model: conversationalResponse.model,
+        tokens: conversationalResponse.tokens,
+        cost: conversationalResponse.cost
       }
 
       setMessages(prev => [...prev, assistantMessage])
+      
+      // Update chat message count
+      setChatHistory(prev => 
+        prev.map(chat => 
+          chat.id === currentChatId 
+            ? { ...chat, lastMessageAt: new Date().toISOString(), messageCount: chat.messageCount + 1 }
+            : chat
+        )
+      )
+      
+      // If AI provided tasks, set up pending task creation
+      if (aiTasks.length > 0) {
+        setPendingTaskCreation({
+          messageId: assistantMessage.id,
+          tasks: aiTasks
+        })
+      }
     } catch (error) {
       console.error('Failed to send message:', error)
       const errorMessage = {
@@ -193,6 +310,15 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
         timestamp: new Date().toISOString()
       }
       setMessages(prev => [...prev, errorMessage])
+      
+      // Update chat message count for error message too
+      setChatHistory(prev => 
+        prev.map(chat => 
+          chat.id === currentChatId 
+            ? { ...chat, lastMessageAt: new Date().toISOString(), messageCount: chat.messageCount + 1 }
+            : chat
+        )
+      )
     } finally {
       setIsLoading(false)
     }
@@ -205,8 +331,270 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     }
   }
 
+
+  const generateChatTitle = (message: string): string => {
+    const words = message.toLowerCase().split(' ')
+    const keyWords = words.filter(word => 
+      word.length > 3 && 
+      !['want', 'need', 'would', 'like', 'help', 'with', 'about', 'this', 'that'].includes(word)
+    )
+    
+    if (keyWords.length > 0) {
+      const title = keyWords.slice(0, 3).join(' ')
+      return title.charAt(0).toUpperCase() + title.slice(1)
+    }
+    
+    return 'New Chat'
+  }
+
+  const createNewChat = () => {
+    const newChatId = `chat-${Date.now()}`
+    const newSession: ChatSession = {
+      id: newChatId,
+      title: 'New Chat',
+      createdAt: new Date().toISOString(),
+      lastMessageAt: new Date().toISOString(),
+      messageCount: 0
+    }
+    
+    setChatHistory(prev => [newSession, ...prev])
+    setCurrentChatId(newChatId)
+    setMessages([])
+  }
+
+  const deleteChatSession = (chatId: string) => {
+    setChatHistory(prev => prev.filter(chat => chat.id !== chatId))
+    
+    if (chatId === currentChatId) {
+      setCurrentChatId('default')
+      setMessages([])
+    }
+  }
+
+  const loadChatSession = (chatId: string) => {
+    setCurrentChatId(chatId)
+    // In a real app, you'd load messages from storage based on chatId
+    // For this demo, we'll just simulate by clearing messages
+    setMessages([])
+  }
+
+  const updateChatTitle = (title: string) => {
+    setChatHistory(prev => 
+      prev.map(chat => 
+        chat.id === currentChatId 
+          ? { ...chat, title, lastMessageAt: new Date().toISOString(), messageCount: chat.messageCount + 1 }
+          : chat
+      )
+    )
+  }
+
+  // Helper functions to parse AI response format
+  const parseTimeToMinutes = (timeStr: string): number => {
+    if (!timeStr) return 60 // Default 1 hour
+    
+    const time = timeStr.toLowerCase()
+    if (time.includes('hour')) {
+      const hours = parseFloat(time.match(/(\d+(?:\.\d+)?)/)?.[1] || '1')
+      return hours * 60
+    } else if (time.includes('minute')) {
+      return parseInt(time.match(/(\d+)/)?.[1] || '60')
+    } else if (time.includes('day') || time.includes('throughout')) {
+      return 480 // 8 hours for all-day tasks
+    } else if (time.includes('week')) {
+      return 2400 // 40 hours for weekly tasks
+    }
+    
+    return 60 // Default 1 hour
+  }
+
+  const getPriorityFromStatus = (status: string): number => {
+    if (!status) return 2 // Default medium priority
+    
+    const statusLower = status.toLowerCase()
+    if (statusLower.includes('urgent') || statusLower.includes('high')) return 1
+    if (statusLower.includes('low') || statusLower.includes('optional')) return 3
+    return 2 // Medium priority
+  }
+
+  const getCategoryFromTitle = (title: string): string => {
+    if (!title) return 'personal'
+    
+    const titleLower = title.toLowerCase()
+    if (titleLower.includes('work') || titleLower.includes('project') || titleLower.includes('meeting')) return 'work'
+    if (titleLower.includes('food') || titleLower.includes('exercise') || titleLower.includes('health')) return 'health'
+    if (titleLower.includes('learn') || titleLower.includes('study') || titleLower.includes('course')) return 'learning'
+    if (titleLower.includes('money') || titleLower.includes('budget') || titleLower.includes('finance')) return 'finance'
+    return 'personal'
+  }
+
+  const loadTasks = async () => {
+    if (!database) return
+    try {
+      const allTasks = await database.getTasks()
+      setTasks(allTasks)
+    } catch (error) {
+      console.error('Failed to load tasks:', error)
+    }
+  }
+
+  const createTasksFromPending = async () => {
+    if (!pendingTaskCreation || !database) return
+
+    console.log('Creating tasks from pending:', pendingTaskCreation)
+    setIsLoading(true)
+    try {
+      const createdTasks: Task[] = []
+      
+      for (const taskData of pendingTaskCreation.tasks) {
+        console.log('Processing task data:', taskData)
+        try {
+          const task = await database.createTask({
+            user_id: 'demo-user-123',
+            title: taskData.title,
+            description: taskData.description,
+            status: 'todo',
+            priority: taskData.priority,
+            due_date: new Date().toISOString(),
+            column_id: 'default',
+            position: 0
+          })
+          console.log('Created task:', task)
+          createdTasks.push(task)
+        } catch (error) {
+          console.error('Error creating task:', error)
+        }
+      }
+
+      console.log('Total tasks created:', createdTasks.length)
+      const successMessage = {
+        id: `msg-${Date.now()}`,
+        role: 'assistant',
+        content: `✅ Perfect! I've created ${createdTasks.length} tasks for you. You can now manage them in the Task Board!`,
+        timestamp: new Date().toISOString()
+      }
+      setMessages(prev => [...prev, successMessage])
+
+      await loadTasks()
+      
+      setPendingTaskCreation(null)
+      setTasksCreated(true)
+      
+    } catch (error) {
+      console.error('Failed to create tasks:', error)
+      
+      const errorMessage = {
+        id: `msg-${Date.now()}`,
+        role: 'assistant',
+        content: "I'm sorry, I couldn't create the tasks right now. Please try again.",
+        timestamp: new Date().toISOString()
+      }
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex bg-gray-50">
+      {/* Chat Sidebar */}
+      {showChatSidebar && (
+        <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col animate-slide-in">
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Chat History</h2>
+              <button
+                onClick={() => setShowChatSidebar(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+          
+          {/* Model and Status Info */}
+          <div className="p-4 border-b border-gray-200 bg-blue-50">
+            <div className="text-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-gray-600">Model:</span>
+                <span className="font-medium text-blue-700">{selectedModel}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">Status:</span>
+                <span className="flex items-center text-green-600">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                  Online
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4">
+            <button
+              onClick={createNewChat}
+              className="w-full mb-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
+            >
+              ➕ Start New Chat
+            </button>
+            
+            <div className="space-y-2">
+              {chatHistory.map((chat) => (
+                <div
+                  key={chat.id}
+                  className={`group p-3 rounded-lg transition-colors ${
+                    chat.id === currentChatId
+                      ? 'bg-blue-100 border border-blue-300'
+                      : 'bg-gray-50 hover:bg-gray-100'
+                  }`}
+                >
+                  <div 
+                    onClick={() => loadChatSession(chat.id)}
+                    className="cursor-pointer"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-medium text-gray-900 text-sm truncate">
+                        {chat.title}
+                      </h3>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs text-gray-500">
+                          {chat.messageCount} msgs
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteChatSession(chat.id)
+                          }}
+                          className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 transition-opacity"
+                          title="Delete chat"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {new Date(chat.lastMessageAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              
+              {chatHistory.length === 0 && (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 text-4xl mb-2">💬</div>
+                  <p className="text-gray-500 text-sm">
+                    No previous chats
+                  </p>
+                  <p className="text-gray-400 text-xs mt-1">
+                    Your conversation history will appear here
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col">
       {/* Chat Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
@@ -224,6 +612,12 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
             </div>
           </div>
           <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setShowChatSidebar(!showChatSidebar)}
+              className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200 text-sm"
+            >
+              {showChatSidebar ? '📋 Hide History' : '📋 Chat History'}
+            </button>
             <button
               onClick={() => setShowModelSelector(!showModelSelector)}
               className="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200"
@@ -337,25 +731,39 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
               🤖
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Start a conversation
+              Welcome to Zeno
             </h3>
             <p className="text-gray-500 mb-6">
-              Ask me anything about your tasks, habits, or productivity goals.
+              How can I help you today?
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
               <button
-                onClick={() => setInputMessage("Help me prioritize my tasks for today")}
+                onClick={() => setInputMessage("I want to start a new chat")}
                 className="p-4 bg-white rounded-lg border border-gray-200 hover:border-primary-300 hover:shadow-sm transition-all duration-200 text-left"
               >
-                <div className="font-medium text-gray-900 mb-1">Task Prioritization</div>
-                <div className="text-sm text-gray-500">Get help organizing your tasks</div>
+                <div className="font-medium text-gray-900 mb-1">💬 Start New Chat</div>
+                <div className="text-sm text-gray-500">Begin a fresh conversation</div>
               </button>
               <button
-                onClick={() => setInputMessage("Suggest some healthy habits I should start")}
+                onClick={() => setInputMessage("I want to add a new task")}
                 className="p-4 bg-white rounded-lg border border-gray-200 hover:border-primary-300 hover:shadow-sm transition-all duration-200 text-left"
               >
-                <div className="font-medium text-gray-900 mb-1">Habit Suggestions</div>
-                <div className="text-sm text-gray-500">Get personalized habit recommendations</div>
+                <div className="font-medium text-gray-900 mb-1">➕ Add New Task</div>
+                <div className="text-sm text-gray-500">Create and organize new tasks</div>
+              </button>
+              <button
+                onClick={() => setInputMessage("I want to update some task")}
+                className="p-4 bg-white rounded-lg border border-gray-200 hover:border-primary-300 hover:shadow-sm transition-all duration-200 text-left"
+              >
+                <div className="font-medium text-gray-900 mb-1">✏️ Update Task</div>
+                <div className="text-sm text-gray-500">Modify existing tasks</div>
+              </button>
+              <button
+                onClick={() => setInputMessage("I want to discuss and plan a task")}
+                className="p-4 bg-white rounded-lg border border-gray-200 hover:border-primary-300 hover:shadow-sm transition-all duration-200 text-left"
+              >
+                <div className="font-medium text-gray-900 mb-1">📋 Discuss & Plan</div>
+                <div className="text-sm text-gray-500">Plan and strategize tasks</div>
               </button>
             </div>
           </div>
@@ -406,9 +814,19 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
               ) : (
                 <div className="whitespace-pre-wrap">{message.content}</div>
               )}
-              {message.tokens && message.tokens > 0 && (
-                <div className="text-xs opacity-70 mt-2">
-                  {message.tokens} tokens • ${message.cost?.toFixed(4)}
+              
+              {/* Add Tasks Button for AI messages with task details */}
+              {message.role === 'assistant' && 
+               pendingTaskCreation && 
+               pendingTaskCreation.messageId === message.id && (
+                <div className="mt-2 pt-2 border-t border-gray-200">
+                  <button
+                    onClick={createTasksFromPending}
+                    disabled={isLoading}
+                    className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:opacity-50"
+                  >
+                    📋 Add Tasks to Task List ({pendingTaskCreation.tasks.length} tasks)
+                  </button>
                 </div>
               )}
             </div>
@@ -432,6 +850,27 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Task Creation Success Notification */}
+      {tasksCreated && (
+        <div className="px-6 py-3 bg-green-50 border-t border-green-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-medium text-green-800 mb-1">🎉 Tasks Created Successfully!</h4>
+              <p className="text-xs text-green-700">Your tasks are now ready to be managed in the Task Board.</p>
+            </div>
+            <button
+              onClick={() => {
+                window.location.hash = '#tasks'
+                setTasksCreated(false)
+              }}
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium text-sm"
+            >
+              📋 Open Task Board
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Input Area */}
       <div className="bg-white border-t border-gray-200 px-6 py-4">
@@ -457,6 +896,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
             </svg>
           </button>
         </div>
+      </div>
       </div>
     </div>
   )

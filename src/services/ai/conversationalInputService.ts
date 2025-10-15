@@ -46,7 +46,7 @@ export class ConversationalInputService {
       // Generate intelligent follow-up questions
       const followUpQuestions = await this.generateFollowUpQuestions(analysis, extractedData)
       
-      // Generate conversational response
+      // Generate conversational response with task extraction
       const response = await this.generateConversationalResponse(
         userMessage,
         analysis,
@@ -54,13 +54,18 @@ export class ConversationalInputService {
         followUpQuestions
       )
 
+      // Combine AI-generated tasks with extracted tasks
+      const allTasks = [...extractedData.tasks, ...(response.tasks || [])]
+      extractedData.tasks = allTasks
+
       // Store extracted data if significant
-      if (extractedData.goals.length > 0 || extractedData.tasks.length > 0) {
+      if (extractedData.goals.length > 0 || allTasks.length > 0) {
         await this.storeExtractedData(extractedData)
       }
 
       return {
-        message: response,
+        message: response.message,
+        user_messages: [userMessage], // Include user message in response
         extractedData,
         followUpQuestions,
         suggestedActions: this.generateSuggestedActions(extractedData)
@@ -69,6 +74,7 @@ export class ConversationalInputService {
       console.error('Error processing conversational input:', error)
       return {
         message: "I understand you're sharing something important with me. Could you tell me more about what you'd like to work on?",
+        user_messages: [userMessage], // Include user message in error response too
         extractedData: { goals: [], tasks: [], entities: [] },
         followUpQuestions: [],
         suggestedActions: []
@@ -161,7 +167,7 @@ Respond with JSON:
    */
   private async extractStructuredData(
     userMessage: string,
-    analysis: ConversationAnalysis
+    _analysis: ConversationAnalysis
   ): Promise<{
     goals: Partial<GoalIntent>[]
     tasks: ExtractedTask[]
@@ -169,10 +175,10 @@ Respond with JSON:
   }> {
     const goals: Partial<GoalIntent>[] = []
     const tasks: ExtractedTask[] = []
-    const entities: ExtractedEntity[] = analysis.entities
+    const entities: ExtractedEntity[] = _analysis.entities
 
     // Process extracted goals
-    for (const goalData of analysis.extractedGoals) {
+    for (const goalData of _analysis.extractedGoals) {
       const goal: Partial<GoalIntent> = {
         id: `goal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: this.userId,
@@ -231,137 +237,133 @@ Respond with JSON:
   ): Promise<ClarificationQuestion[]> {
     const questions: ClarificationQuestion[] = []
 
-    // Add questions from analysis
-    for (const suggestedQ of analysis.suggestedQuestions) {
-      const question: ClarificationQuestion = {
-        id: `q-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        question: suggestedQ.question,
-        context: suggestedQ.context,
-        expectedAnswerType: suggestedQ.expectedAnswerType as any,
-        options: suggestedQ.options,
-        isAnswered: false,
-        createdAt: new Date().toISOString()
-      }
-      questions.push(question)
-    }
-
-    // Generate additional contextual questions
+    // Only ask 1 essential question to move quickly to task creation
     if (extractedData.goals.length > 0) {
-      const goalQuestions = await this.generateGoalClarificationQuestions(extractedData.goals)
-      questions.push(...goalQuestions)
+      const essentialQuestion = await this.generateEssentialQuestion(extractedData.goals[0])
+      if (essentialQuestion) {
+        questions.push(essentialQuestion)
+      }
     }
 
-    return questions.slice(0, 3) // Limit to 3 questions to avoid overwhelming
+    return questions.slice(0, 1) // Limit to 1 question only
   }
 
   /**
-   * Generate goal-specific clarification questions
+   * Generate one essential question to move quickly to task creation
    */
-  private async generateGoalClarificationQuestions(goals: Partial<GoalIntent>[]): Promise<ClarificationQuestion[]> {
-    const questions: ClarificationQuestion[] = []
-
-    for (const goal of goals) {
-      // Generate category-specific questions
-      switch (goal.category) {
-        case 'health':
-          questions.push({
-            id: `q-health-${Date.now()}`,
-            question: "What specific health activities are you most interested in?",
-            context: "clarify_health_preferences",
-            expectedAnswerType: 'choice',
-            options: ['exercise', 'nutrition', 'mental health', 'sleep', 'medical checkups'],
-            isAnswered: false,
-            createdAt: new Date().toISOString()
-          })
-          break
-
-        case 'career':
-          questions.push({
-            id: `q-career-${Date.now()}`,
-            question: "Is this goal related to your current job, a career change, or professional development?",
-            context: "clarify_career_context",
-            expectedAnswerType: 'choice',
-            options: ['current job', 'career change', 'professional development', 'side project'],
-            isAnswered: false,
-            createdAt: new Date().toISOString()
-          })
-          break
-
-        case 'finance':
-          questions.push({
-            id: `q-finance-${Date.now()}`,
-            question: "What's your target amount or financial milestone?",
-            context: "clarify_financial_target",
-            expectedAnswerType: 'text',
-            isAnswered: false,
-            createdAt: new Date().toISOString()
-          })
-          break
-
-        case 'learning':
-          questions.push({
-            id: `q-learning-${Date.now()}`,
-            question: "What specific skills or knowledge do you want to gain?",
-            context: "clarify_learning_objectives",
-            expectedAnswerType: 'text',
-            isAnswered: false,
-            createdAt: new Date().toISOString()
-          })
-          break
-      }
-
-      // Add timeframe clarification if not specified
-      if (!goal.timeframe || goal.timeframe === 'monthly') {
-        questions.push({
-          id: `q-timeframe-${Date.now()}`,
-          question: "When would you like to achieve this goal?",
-          context: "clarify_timeline",
+  private async generateEssentialQuestion(goal: Partial<GoalIntent>): Promise<ClarificationQuestion | null> {
+    // Generate one quick question based on goal category to get to tasks faster
+    switch (goal.category) {
+      case 'health':
+        return {
+          id: `q-essential-${Date.now()}`,
+          question: "What's your main focus - exercise, nutrition, or both?",
+          context: "quick_clarification",
           expectedAnswerType: 'choice',
-          options: ['this week', 'this month', 'next 3 months', 'this year', 'long-term'],
+          options: ['exercise', 'nutrition', 'both'],
           isAnswered: false,
           createdAt: new Date().toISOString()
-        })
-      }
+        }
+      
+      case 'career':
+        return {
+          id: `q-essential-${Date.now()}`,
+          question: "Is this for your current job or a new opportunity?",
+          context: "quick_clarification",
+          expectedAnswerType: 'choice',
+          options: ['current job', 'new opportunity', 'side project'],
+          isAnswered: false,
+          createdAt: new Date().toISOString()
+        }
+      
+      case 'finance':
+        return {
+          id: `q-essential-${Date.now()}`,
+          question: "What's your target amount?",
+          context: "quick_clarification",
+          expectedAnswerType: 'text',
+          isAnswered: false,
+          createdAt: new Date().toISOString()
+        }
+      
+      case 'learning':
+        return {
+          id: `q-essential-${Date.now()}`,
+          question: "What specific skill do you want to learn?",
+          context: "quick_clarification",
+          expectedAnswerType: 'text',
+          isAnswered: false,
+          createdAt: new Date().toISOString()
+        }
+      
+      default:
+        return {
+          id: `q-essential-${Date.now()}`,
+          question: "When do you want to achieve this?",
+          context: "quick_clarification",
+          expectedAnswerType: 'choice',
+          options: ['this week', 'this month', 'next 3 months', 'this year'],
+          isAnswered: false,
+          createdAt: new Date().toISOString()
+        }
     }
-
-    return questions.slice(0, 2) // Limit to 2 additional questions
   }
 
   /**
-   * Generate conversational response
+   * Generate conversational response with task extraction check
    */
   private async generateConversationalResponse(
     userMessage: string,
-    analysis: ConversationAnalysis,
-    extractedData: any,
-    followUpQuestions: ClarificationQuestion[]
-  ): Promise<string> {
+    _analysis: ConversationAnalysis,
+    _extractedData: any,
+    _followUpQuestions: ClarificationQuestion[]
+  ): Promise<{ message: string; user_messages?: string[]; tasks?: any[] }> {
+    
+    // First try to generate structured response
+    const structuredResponse = await this.generateStructuredResponse(userMessage)
+    
+    // If we got tasks, return them
+    if (structuredResponse.tasks && structuredResponse.tasks.length > 0) {
+      return structuredResponse
+    }
+    
+    // Otherwise, ask for clarification
+    return {
+      message: "I need more details. What specific tasks do you want to work on today?",
+      user_messages: [userMessage] // Include user message
+    }
+  }
+
+  /**
+   * Generate structured JSON response for task creation
+   */
+  private async generateStructuredResponse(userMessage: string): Promise<{ message: string; user_messages?: string[]; tasks?: any[] }> {
     const prompt = `
-You are Zeno, a warm and intelligent AI companion for personal growth and planning.
+STRICT INSTRUCTIONS: You MUST respond ONLY with valid JSON. No text explanations, no markdown, no detailed descriptions.
 
 User Message: "${userMessage}"
 
-Analysis Results:
-- Intent: ${analysis.intent.type} (confidence: ${analysis.intent.confidence})
-- Goals Extracted: ${extractedData.goals.length}
-- Tasks Extracted: ${extractedData.tasks.length}
-- Follow-up Questions: ${followUpQuestions.length}
+Extract tasks from this message and respond with this EXACT JSON format:
+{
+  "message": "Here are your tasks:",
+  "tasks": [
+    {
+      "title": "Task Name",
+      "description": "Brief description",
+      "estimatedDuration": 120,
+      "priority": 1,
+      "category": "work"
+    }
+  ]
+}
 
-Generate a warm, conversational response that:
-1. Acknowledges what the user shared
-2. Shows understanding of their goals/intent
-3. Naturally incorporates 1-2 follow-up questions
-4. Maintains an encouraging, supportive tone
-5. Keeps the conversation flowing naturally
-
-Be conversational, not robotic. Ask questions naturally within the flow of conversation.
-
-Example responses:
-- "That's exciting! I can see you're really motivated about [goal]. What specific aspect of [goal] are you most excited to work on?"
-- "I love that you're thinking about [goal]! When you imagine achieving this, what does success look like to you?"
-- "That sounds like a meaningful goal! What's driving you to pursue [goal] right now?"
-
-Keep it under 100 words and make it feel like talking to a supportive friend.
+RULES:
+- estimatedDuration: time in minutes (60 = 1 hour, 120 = 2 hours)
+- priority: 1=High, 2=Medium, 3=Low
+- category: "work", "health", "learning", "finance", "personal"
+- Extract ALL tasks mentioned in the user message
+- Convert time estimates to minutes
+- Respond ONLY with valid JSON, nothing else
 `
 
     try {
@@ -370,50 +372,84 @@ Keep it under 100 words and make it feel like talking to a supportive friend.
         {
           provider: 'gemini',
           modelId: 'gemini-2.5-flash',
-          temperature: 0.8,
-          maxTokens: 200
+          temperature: 0.3, // Lower temperature for more consistent JSON
+          maxTokens: 1000   // Increased token limit for proper JSON responses
         },
-        'You are Zeno, a warm and intelligent AI companion for personal growth.'
+        'You are a JSON-only response generator for task creation.'
       )
 
-      return response.content
+      console.log('AI Response:', response.content)
+      
+      // Try to parse JSON response
+      try {
+        const parsed = JSON.parse(response.content)
+        console.log('Parsed JSON:', parsed)
+        
+        if (parsed.tasks && Array.isArray(parsed.tasks) && parsed.tasks.length > 0) {
+          console.log('Found tasks in AI response:', parsed.tasks)
+          return {
+            message: parsed.message,
+            user_messages: [userMessage], // Include user message
+            tasks: parsed.tasks
+          }
+        }
+      } catch (parseError) {
+        console.error('JSON parsing failed:', parseError)
+        console.log('Raw response:', response.content)
+        
+        // Try to extract JSON from the response if it's wrapped in text
+        const jsonMatch = response.content.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          try {
+            const parsed = JSON.parse(jsonMatch[0])
+            if (parsed.tasks && Array.isArray(parsed.tasks) && parsed.tasks.length > 0) {
+              return {
+                message: parsed.message,
+                user_messages: [userMessage], // Include user message
+                tasks: parsed.tasks
+              }
+            }
+          } catch (secondParseError) {
+            console.error('Second JSON parsing failed:', secondParseError)
+          }
+        }
+      }
+
+      // If no valid JSON found, return empty
+      return { 
+        message: "I couldn't extract tasks from your message. Please try again.",
+        user_messages: [userMessage] // Include user message
+      }
+      
     } catch (error) {
-      console.error('Error generating conversational response:', error)
-      return "That's really interesting! I'd love to help you work through this. Could you tell me more about what you're hoping to achieve?"
+      console.error('Error generating structured response:', error)
+      return { 
+        message: "I'm having trouble processing that right now. Could you try rephrasing your response?",
+        user_messages: [userMessage] // Include user message
+      }
     }
   }
 
   /**
-   * Decompose a goal into subgoals and tasks
+   * Decompose a goal into subgoals and tasks - FAST AND DIRECT
    */
   private async decomposeGoal(goal: GoalIntent): Promise<{ subgoals: SubGoal[]; tasks: ExtractedTask[] }> {
     const prompt = `
-Break down this goal into actionable subgoals and tasks:
+Create 2-3 quick tasks for this goal:
 
 Goal: "${goal.extractedGoal}"
 Category: ${goal.category}
-Timeframe: ${goal.timeframe}
-Priority: ${goal.priority}/5
 
-Create 2-3 subgoals and 3-5 specific tasks that will help achieve this goal.
+Generate 2-3 specific, actionable tasks (max 5 words each).
 
 Respond with JSON:
 {
-  "subgoals": [
-    {
-      "title": "Subgoal title",
-      "description": "What this subgoal involves",
-      "timeframe": "weekly",
-      "priority": 4,
-      "tasks": ["Task 1", "Task 2"]
-    }
-  ],
   "tasks": [
     {
-      "title": "Specific task",
-      "description": "What needs to be done",
+      "title": "Short task name",
+      "description": "Brief description",
       "priority": 3,
-      "estimatedDuration": 60,
+      "estimatedDuration": 30,
       "category": "execution"
     }
   ]
@@ -426,32 +462,14 @@ Respond with JSON:
         {
           provider: 'gemini',
           modelId: 'gemini-2.5-flash',
-          temperature: 0.7,
-          maxTokens: 800
+          temperature: 0.6,
+          maxTokens: 300
         },
-        'You are Zeno, an expert at breaking down goals into actionable steps.'
+        'You are Zeno, creating quick actionable tasks.'
       )
 
       const parsed = this.parseGoalDecomposition(response.content)
       
-      const subgoals: SubGoal[] = parsed.subgoals.map((sg: any, index: number) => ({
-        id: `subgoal-${Date.now()}-${index}`,
-        title: sg.title,
-        description: sg.description,
-        timeframe: sg.timeframe as GoalTimeframe,
-        priority: sg.priority,
-        parentGoalId: goal.id!,
-        tasks: sg.tasks.map((taskTitle: string, taskIndex: number) => ({
-          id: `task-${Date.now()}-${index}-${taskIndex}`,
-          title: taskTitle,
-          description: `Task for ${sg.title}`,
-          priority: sg.priority,
-          category: 'execution' as TaskCategory,
-          dependencies: [],
-          parentSubGoalId: `subgoal-${Date.now()}-${index}`
-        }))
-      }))
-
       const tasks: ExtractedTask[] = parsed.tasks.map((task: any, index: number) => ({
         id: `task-${Date.now()}-${index}`,
         title: task.title,
@@ -463,7 +481,7 @@ Respond with JSON:
         parentGoalId: goal.id
       }))
 
-      return { subgoals, tasks }
+      return { subgoals: [], tasks } // Skip subgoals for speed
     } catch (error) {
       console.error('Error decomposing goal:', error)
       return { subgoals: [], tasks: [] }

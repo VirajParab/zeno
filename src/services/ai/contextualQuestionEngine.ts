@@ -20,7 +20,7 @@ export class ContextualQuestionEngine {
   }
 
   /**
-   * Ticket 1.2: Contextual Question Engine
+   * Ticket 1.2: Contextual Question Engine - OPTIMIZED FOR SPEED
    * Generate intelligent follow-up questions to refine vague goals
    */
   async generateContextualQuestions(
@@ -29,19 +29,80 @@ export class ContextualQuestionEngine {
     currentGoals: GoalIntent[] = []
   ): Promise<ClarificationQuestion[]> {
     try {
-      // Analyze the conversation for areas that need clarification
-      const analysis = await this.analyzeForClarificationNeeds(userMessage, conversationHistory, currentGoals)
-      
-      // Generate contextual questions based on analysis
-      const questions = await this.generateIntelligentQuestions(analysis)
-      
-      // Filter and prioritize questions
-      const prioritizedQuestions = this.prioritizeQuestions(questions, analysis)
-      
-      return prioritizedQuestions.slice(0, 3) // Return top 3 questions
+      // Skip complex analysis - just ask one quick question
+      const quickQuestion = this.generateQuickQuestion(userMessage)
+      return quickQuestion ? [quickQuestion] : []
     } catch (error) {
       console.error('Error generating contextual questions:', error)
-      return this.getFallbackQuestions(userMessage)
+      return []
+    }
+  }
+
+  /**
+   * Generate one quick question based on message content
+   */
+  private generateQuickQuestion(userMessage: string): ClarificationQuestion | null {
+    const message = userMessage.toLowerCase()
+    
+    // Health goals
+    if (message.includes('fit') || message.includes('health') || message.includes('exercise')) {
+      return {
+        id: `q-quick-${Date.now()}`,
+        question: "Exercise or nutrition focus?",
+        context: "quick_clarification",
+        expectedAnswerType: 'choice',
+        options: ['exercise', 'nutrition', 'both'],
+        isAnswered: false,
+        createdAt: new Date().toISOString()
+      }
+    }
+    
+    // Career goals
+    if (message.includes('career') || message.includes('job') || message.includes('work')) {
+      return {
+        id: `q-quick-${Date.now()}`,
+        question: "Current job or new opportunity?",
+        context: "quick_clarification",
+        expectedAnswerType: 'choice',
+        options: ['current job', 'new opportunity', 'side project'],
+        isAnswered: false,
+        createdAt: new Date().toISOString()
+      }
+    }
+    
+    // Money goals
+    if (message.includes('money') || message.includes('earn') || message.includes('income')) {
+      return {
+        id: `q-quick-${Date.now()}`,
+        question: "Target amount?",
+        context: "quick_clarification",
+        expectedAnswerType: 'text',
+        isAnswered: false,
+        createdAt: new Date().toISOString()
+      }
+    }
+    
+    // Learning goals
+    if (message.includes('learn') || message.includes('study') || message.includes('skill')) {
+      return {
+        id: `q-quick-${Date.now()}`,
+        question: "What skill specifically?",
+        context: "quick_clarification",
+        expectedAnswerType: 'text',
+        isAnswered: false,
+        createdAt: new Date().toISOString()
+      }
+    }
+    
+    // Default timeline question
+    return {
+      id: `q-quick-${Date.now()}`,
+      question: "Timeline?",
+      context: "quick_clarification",
+      expectedAnswerType: 'choice',
+      options: ['this week', 'this month', 'next 3 months', 'this year'],
+      isAnswered: false,
+      createdAt: new Date().toISOString()
     }
   }
 
@@ -218,7 +279,7 @@ Respond with JSON:
   }
 
   /**
-   * Process user's answer to a clarification question
+   * Process user's answer to a clarification question - SHORT RESPONSES
    */
   async processClarificationAnswer(
     questionId: string,
@@ -230,33 +291,35 @@ Respond with JSON:
     response: string
   }> {
     try {
-      // Find the question
-      const question = await this.findQuestionById(questionId)
-      if (!question) {
-        throw new Error('Question not found')
-      }
-
-      // Update the question with the answer
-      question.isAnswered = true
-      question.answer = answer
-
-      // Generate follow-up based on the answer
-      const followUp = await this.generateFollowUpFromAnswer(question, answer, conversationHistory)
+      // Generate short acknowledgment and create tasks immediately
+      const response = this.generateShortAcknowledgment(answer)
       
-      // Generate a conversational response acknowledging the answer
-      const response = await this.generateAnswerAcknowledgment(question, answer)
-
       return {
-        updatedGoal: followUp.updatedGoal,
-        followUpQuestions: followUp.questions,
-        response
+        response,
+        followUpQuestions: [], // No more follow-up questions
+        updatedGoal: undefined
       }
     } catch (error) {
       console.error('Error processing clarification answer:', error)
       return {
-        response: "Thanks for sharing that! It helps me understand your goals better."
+        response: "Got it! Creating tasks now."
       }
     }
+  }
+
+  /**
+   * Generate short acknowledgment
+   */
+  private generateShortAcknowledgment(answer: string): string {
+    const responses = [
+      "Perfect! Creating tasks now.",
+      "Great! Setting up your plan.",
+      "Got it! Building your task list.",
+      "Excellent! Generating tasks.",
+      "Nice! Creating your action plan."
+    ]
+    
+    return responses[Math.floor(Math.random() * responses.length)]
   }
 
   /**

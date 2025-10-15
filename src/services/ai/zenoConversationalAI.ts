@@ -25,7 +25,7 @@ export class ZenoConversationalAI {
   }
 
   /**
-   * Main entry point for conversational AI processing
+   * Main entry point for conversational AI processing - OPTIMIZED FOR SPEED
    * Combines both conversational input and contextual questioning
    */
   async processConversation(
@@ -40,21 +40,21 @@ export class ZenoConversationalAI {
         conversationHistory
       )
 
-      // Step 2: Generate contextual questions for clarification
+      // Step 2: Generate contextual questions for clarification (MAX 1 QUESTION)
       const contextualQuestions = await this.questionEngine.generateContextualQuestions(
         userMessage,
         conversationHistory,
         currentGoals
       )
 
-      // Step 3: Combine responses and questions
+      // Step 3: Combine responses and questions (LIMIT TO 1 QUESTION TOTAL)
       const combinedResponse: ConversationalResponse = {
         message: inputResponse.message,
         extractedData: inputResponse.extractedData,
         followUpQuestions: [
           ...inputResponse.followUpQuestions,
           ...contextualQuestions
-        ].slice(0, 3), // Limit to 3 total questions
+        ].slice(0, 1), // LIMIT TO 1 QUESTION ONLY
         suggestedActions: inputResponse.suggestedActions
       }
 
@@ -313,11 +313,11 @@ Respond with JSON:
   }
 
   /**
-   * Create fallback response when processing fails
+   * Create fallback response when processing fails - SHORT AND DIRECT
    */
   private createFallbackResponse(userMessage: string): ConversationalResponse {
     return {
-      message: "I'm here to help you brainstorm and plan your goals. Could you tell me more about what you'd like to work on?",
+      message: "Great! What's your main focus?",
       extractedData: {
         goals: [],
         tasks: [],
@@ -326,9 +326,10 @@ Respond with JSON:
       followUpQuestions: [
         {
           id: `q-fallback-${Date.now()}`,
-          question: "What's the most important goal you'd like to focus on right now?",
-          context: "primary_goal_identification",
-          expectedAnswerType: 'text',
+          question: "Timeline?",
+          context: "quick_clarification",
+          expectedAnswerType: 'choice',
+          options: ['this week', 'this month', 'next 3 months', 'this year'],
           isAnswered: false,
           createdAt: new Date().toISOString()
         }

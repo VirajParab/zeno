@@ -1,10 +1,19 @@
 import { useState, useEffect, useRef } from 'react'
 import { AdvancedZenoCoachingService, UserProfile, DailyReflection, ConversationMessage } from '../services/ai/advancedZenoCoachingService'
 import { ZenoConversationalAI } from '../services/ai/zenoConversationalAI'
+import { IntelligentDailyPlanner, DailyPlan, DailyPlanConfirmation } from '../services/ai/intelligentDailyPlanner'
 import { AIService } from '../services/ai/aiService'
 import { useDatabase } from '../services/database/DatabaseContext'
 import { Task } from '../services/database/types'
 import { ConversationalResponse, GoalIntent, ClarificationQuestion } from '../services/ai/conversationalTypes'
+
+interface ChatSession {
+  id: string
+  title: string
+  createdAt: string
+  lastMessageAt: string
+  messageCount: number
+}
 
 interface DailyCoachingProps {
   coachingService: AdvancedZenoCoachingService
@@ -26,12 +35,24 @@ const DailyCoaching = ({ coachingService, userProfile }: DailyCoachingProps) => 
   const [extractedGoals, setExtractedGoals] = useState<GoalIntent[]>([])
   const [pendingQuestions, setPendingQuestions] = useState<ClarificationQuestion[]>([])
   const [conversationalAI, setConversationalAI] = useState<ZenoConversationalAI | null>(null)
+  const [dailyPlanner, setDailyPlanner] = useState<IntelligentDailyPlanner | null>(null)
+  const [dailyPlan, setDailyPlan] = useState<DailyPlan | null>(null)
+  const [showPlanConfirmation, setShowPlanConfirmation] = useState(false)
+  const [tasksCreated, setTasksCreated] = useState(false)
+  const [pendingTaskCreation, setPendingTaskCreation] = useState<{
+    messageId: string
+    tasks: any[]
+  } | null>(null)
+  const [chatHistory, setChatHistory] = useState<ChatSession[]>([])
+  const [currentChatId, setCurrentChatId] = useState<string>('default')
+  const [showChatSidebar, setShowChatSidebar] = useState(true)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     loadTasks()
     determineCheckInType()
     initializeConversationalAI()
+    initializeSampleChats()
   }, [])
 
   useEffect(() => {
@@ -42,8 +63,37 @@ const DailyCoaching = ({ coachingService, userProfile }: DailyCoachingProps) => 
     if (database) {
       const aiService = new AIService(database, userProfile.id)
       const conversationalAI = new ZenoConversationalAI(aiService, database, userProfile.id)
+      const planner = new IntelligentDailyPlanner(aiService, database, userProfile.id)
       setConversationalAI(conversationalAI)
+      setDailyPlanner(planner)
     }
+  }
+
+  const initializeSampleChats = () => {
+    const sampleChats: ChatSession[] = [
+      {
+        id: 'sample-1',
+        title: 'Daily Planning',
+        createdAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+        lastMessageAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+        messageCount: 8
+      },
+      {
+        id: 'sample-2', 
+        title: 'Fitness Goals',
+        createdAt: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
+        lastMessageAt: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
+        messageCount: 12
+      },
+      {
+        id: 'sample-3',
+        title: 'Work Projects',
+        createdAt: new Date(Date.now() - 259200000).toISOString(), // 3 days ago
+        lastMessageAt: new Date(Date.now() - 10800000).toISOString(), // 3 hours ago
+        messageCount: 15
+      }
+    ]
+    setChatHistory(sampleChats)
   }
 
   const scrollToBottom = () => {
@@ -166,55 +216,93 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
   }
 
   const sendResponse = async () => {
-    if (!userResponse.trim() || !conversationalAI) return
+    if (!userResponse.trim() || !conversationalAI || !dailyPlanner) return
 
     setIsTyping(true)
     
-    // Add user message to conversation history
-    const userMessage: ConversationMessage = {
-      id: `msg-${Date.now()}`,
-      role: 'user',
-      content: userResponse,
-      timestamp: new Date().toISOString()
-    }
-    setConversationHistory(prev => [...prev, userMessage])
+        // Add user message to conversation history
+        const userMessage: ConversationMessage = {
+          id: `msg-${Date.now()}`,
+          role: 'user',
+          content: userResponse,
+          timestamp: new Date().toISOString()
+        }
+        setConversationHistory(prev => [...prev, userMessage])
+
+        // Update chat title if this is the first user message
+        if (conversationHistory.length === 0) {
+          const title = generateChatTitle(userResponse)
+          updateChatTitle(title)
+        }
 
     try {
-      // Process user response with conversational AI
-      const response = await conversationalAI.processConversation(
-        userResponse,
-        conversationHistory.map(msg => ({
-          messageId: msg.id,
-          role: msg.role,
-          content: msg.content,
-          timestamp: msg.timestamp
-        })),
-        extractedGoals
-      )
+      // Check if user is asking for daily planning
+      const isPlanningRequest = userResponse.toLowerCase().includes('plan') || 
+                               userResponse.toLowerCase().includes('schedule') ||
+                               userResponse.toLowerCase().includes('today') ||
+                               userResponse.toLowerCase().includes('day')
 
-      // Handle extracted goals
-      if (response.extractedData?.goals.length > 0) {
-        setExtractedGoals(prev => [...prev, ...response.extractedData.goals as GoalIntent[]])
-      }
+      if (isPlanningRequest) {
+        // Generate intelligent daily plan
+        const { plan, confirmationMessage } = await dailyPlanner.generateQuickPlan(userResponse)
+        setDailyPlan(plan)
+        setShowPlanConfirmation(true)
 
-      // Handle follow-up questions
-      if (response.followUpQuestions.length > 0) {
-        setPendingQuestions(prev => [...prev, ...response.followUpQuestions])
-      }
+        const zenoMessage: ConversationMessage = {
+          id: `msg-${Date.now()}`,
+          role: 'zeno',
+          content: confirmationMessage,
+          timestamp: new Date().toISOString()
+        }
+        setConversationHistory(prev => [...prev, zenoMessage])
+      } else {
+        // Process user response with conversational AI
+        const response = await conversationalAI.processConversation(
+          userResponse,
+          conversationHistory.map(msg => ({
+            messageId: msg.id,
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.timestamp
+          })),
+          extractedGoals
+        )
 
-      // Handle suggested actions
-      if (response.suggestedActions.length > 0) {
-        await handleSuggestedActions(response.suggestedActions)
-      }
+        // Handle extracted goals
+        if (response.extractedData?.goals.length > 0) {
+          setExtractedGoals(prev => [...prev, ...response.extractedData.goals as GoalIntent[]])
+        }
 
-      // Add Zeno's response to conversation history
-      const zenoMessage: ConversationMessage = {
-        id: `msg-${Date.now()}`,
-        role: 'zeno',
-        content: response.message,
-        timestamp: new Date().toISOString()
+        // Handle follow-up questions
+        if (response.followUpQuestions.length > 0) {
+          setPendingQuestions(prev => [...prev, ...response.followUpQuestions])
+        }
+
+        // Handle suggested actions
+        if (response.suggestedActions.length > 0) {
+          await handleSuggestedActions(response.suggestedActions)
+        }
+
+        // Check if AI response contains task details for creation
+        const aiTasks = response.extractedData?.tasks || []
+        
+        // Add Zeno's response to conversation history
+        const zenoMessage: ConversationMessage = {
+          id: `msg-${Date.now()}`,
+          role: 'zeno',
+          content: response.message,
+          timestamp: new Date().toISOString()
+        }
+        setConversationHistory(prev => [...prev, zenoMessage])
+        
+        // If AI provided tasks, set up pending task creation
+        if (aiTasks.length > 0) {
+          setPendingTaskCreation({
+            messageId: zenoMessage.id,
+            tasks: aiTasks
+          })
+        }
       }
-      setConversationHistory(prev => [...prev, zenoMessage])
       
       setUserResponse('')
     } catch (error) {
@@ -316,6 +404,42 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
     }
   }
 
+  const confirmDailyPlan = async (approved: boolean) => {
+    if (!dailyPlan || !dailyPlanner) return
+
+    setIsTyping(true)
+    try {
+      const confirmation: DailyPlanConfirmation = {
+        planId: dailyPlan.id,
+        approvedBlocks: approved ? dailyPlan.timeBlocks.map(block => block.id) : [],
+        rejectedBlocks: approved ? [] : dailyPlan.timeBlocks.map(block => block.id),
+        modifications: [],
+        userFeedback: approved ? 'Plan approved' : 'Plan rejected'
+      }
+
+      const result = await dailyPlanner.processPlanConfirmation(dailyPlan, confirmation)
+      
+      const responseMessage: ConversationMessage = {
+        id: `msg-${Date.now()}`,
+        role: 'zeno',
+        content: `${result.message} Created ${result.createdTasks.length} tasks. You can now view and manage them in the Task Board!`,
+        timestamp: new Date().toISOString()
+      }
+      setConversationHistory(prev => [...prev, responseMessage])
+
+      // Reload tasks to show newly created ones
+      await loadTasks()
+      
+      setShowPlanConfirmation(false)
+      setDailyPlan(null)
+      setTasksCreated(true)
+    } catch (error) {
+      console.error('Failed to process plan confirmation:', error)
+    } finally {
+      setIsTyping(false)
+    }
+  }
+
   const handleTaskActions = async (actions: any[]) => {
     if (!database) return
 
@@ -381,9 +505,324 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
     }
   }
 
+  /**
+   * Extract tasks from AI response message
+   */
+  const extractTasksFromResponse = (message: string): any[] => {
+    const tasks: any[] = []
+    
+    // Look for task patterns like:
+    // "1. Task Name (X hours)"
+    // "Task Name: Description (X hours)"
+    // "• Task Name (X hours)"
+    
+    const taskPatterns = [
+      /(\d+\.\s*)([^(]+)\s*\(([^)]+)\)/g,  // "1. Task Name (X hours)"
+      /([^:]+):\s*([^(]+)\s*\(([^)]+)\)/g,  // "Task Name: Description (X hours)"
+      /(•\s*)([^(]+)\s*\(([^)]+)\)/g,       // "• Task Name (X hours)"
+      /(-\s*)([^(]+)\s*\(([^)]+)\)/g        // "- Task Name (X hours)"
+    ]
+    
+    for (const pattern of taskPatterns) {
+      let match
+      while ((match = pattern.exec(message)) !== null) {
+        const taskTitle = match[2]?.trim() || match[1]?.trim()
+        const timeStr = match[3]?.trim()
+        
+        if (taskTitle && timeStr) {
+          // Convert time to minutes
+          let duration = 60 // default 1 hour
+          if (timeStr.includes('hour')) {
+            const hours = parseFloat(timeStr.match(/(\d+(?:\.\d+)?)/)?.[1] || '1')
+            duration = hours * 60
+          } else if (timeStr.includes('min')) {
+            duration = parseInt(timeStr.match(/(\d+)/)?.[1] || '60')
+          }
+          
+          tasks.push({
+            title: taskTitle,
+            description: taskTitle,
+            estimatedDuration: duration,
+            priority: 2, // Medium priority by default
+            category: 'general'
+          })
+        }
+      }
+    }
+    
+    console.log('Extracted tasks from response:', tasks)
+    return tasks
+  }
+
+  /**
+   * Create tasks from pending task creation
+   */
+  const createTasksFromPending = async () => {
+    if (!pendingTaskCreation || !database) return
+
+    setIsTyping(true)
+    try {
+      const createdTasks: Task[] = []
+      
+      for (const taskData of pendingTaskCreation.tasks) {
+        try {
+          const task = await database.createTask({
+            user_id: userProfile.id,
+            title: taskData.title,
+            description: taskData.description,
+            status: 'todo',
+            priority: taskData.priority,
+            due_date: new Date().toISOString(),
+            column_id: 'default',
+            position: 0
+          })
+          createdTasks.push(task)
+        } catch (error) {
+          console.error('Error creating task:', error)
+        }
+      }
+
+      // Add success message to conversation
+      const successMessage: ConversationMessage = {
+        id: `msg-${Date.now()}`,
+        role: 'zeno',
+        content: `✅ Perfect! I've created ${createdTasks.length} tasks for you. You can now manage them in the Task Board!`,
+        timestamp: new Date().toISOString()
+      }
+      setConversationHistory(prev => [...prev, successMessage])
+
+      // Reload tasks to show newly created ones
+      await loadTasks()
+      
+      // Clear pending task creation
+      setPendingTaskCreation(null)
+      setTasksCreated(true)
+      
+    } catch (error) {
+      console.error('Failed to create tasks:', error)
+      
+      const errorMessage: ConversationMessage = {
+        id: `msg-${Date.now()}`,
+        role: 'zeno',
+        content: "I'm sorry, I couldn't create the tasks right now. Please try again.",
+        timestamp: new Date().toISOString()
+      }
+      setConversationHistory(prev => [...prev, errorMessage])
+    } finally {
+      setIsTyping(false)
+    }
+  }
+
+  /**
+   * Clean current chat and start fresh
+   */
+  const cleanChat = () => {
+    setConversationHistory([])
+    setExtractedGoals([])
+    setPendingQuestions([])
+    setPendingTaskCreation(null)
+    setTasksCreated(false)
+    setDailyPlan(null)
+    setShowPlanConfirmation(false)
+    
+    // Add a fresh welcome message
+    const welcomeMessage: ConversationMessage = {
+      id: `msg-${Date.now()}`,
+      role: 'zeno',
+      content: `Hello ${userProfile.name}! I'm ready for a fresh conversation. What would you like to work on today?`,
+      timestamp: new Date().toISOString()
+    }
+    setConversationHistory([welcomeMessage])
+  }
+
+  /**
+   * Create a new chat session
+   */
+  const createNewChat = () => {
+    const newChatId = `chat-${Date.now()}`
+    const newSession: ChatSession = {
+      id: newChatId,
+      title: 'New Chat',
+      createdAt: new Date().toISOString(),
+      lastMessageAt: new Date().toISOString(),
+      messageCount: 0
+    }
+    
+    setChatHistory(prev => [newSession, ...prev])
+    setCurrentChatId(newChatId)
+    cleanChat()
+  }
+
+  /**
+   * Load a specific chat session
+   */
+  const loadChatSession = (chatId: string) => {
+    setCurrentChatId(chatId)
+    // For now, just clean the current chat
+    // In a full implementation, you'd load the chat history from storage
+    cleanChat()
+  }
+
+  /**
+   * Update current chat session title
+   */
+  const updateChatTitle = (title: string) => {
+    setChatHistory(prev => 
+      prev.map(chat => 
+        chat.id === currentChatId 
+          ? { ...chat, title, lastMessageAt: new Date().toISOString() }
+          : chat
+      )
+    )
+  }
+
+  /**
+   * Generate chat title from user message
+   */
+  const generateChatTitle = (message: string): string => {
+    // Extract key words from the message
+    const words = message.toLowerCase().split(' ')
+    const keyWords = words.filter(word => 
+      word.length > 3 && 
+      !['want', 'need', 'would', 'like', 'help', 'with', 'about', 'this', 'that'].includes(word)
+    )
+    
+    if (keyWords.length > 0) {
+      const title = keyWords.slice(0, 3).join(' ')
+      return title.charAt(0).toUpperCase() + title.slice(1)
+    }
+    
+    return 'New Chat'
+  }
+
+  /**
+   * Delete a chat session
+   */
+  const deleteChatSession = (chatId: string) => {
+    setChatHistory(prev => prev.filter(chat => chat.id !== chatId))
+    
+    // If we're deleting the current chat, switch to default
+    if (chatId === currentChatId) {
+      setCurrentChatId('default')
+      cleanChat()
+    }
+  }
+
+  /**
+   * Update current chat session title
+   */
+  const updateChatTitle = (title: string) => {
+    setChatHistory(prev => 
+      prev.map(chat => 
+        chat.id === currentChatId 
+          ? { ...chat, title, lastMessageAt: new Date().toISOString() }
+          : chat
+      )
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-4xl mx-auto">
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Chat Sidebar */}
+      {showChatSidebar && (
+        <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col animate-slide-in">
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Chat History</h2>
+              <button
+                onClick={() => setShowChatSidebar(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+          
+          {/* Model and Status Info */}
+          <div className="p-4 border-b border-gray-200 bg-blue-50">
+            <div className="text-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-gray-600">Model:</span>
+                <span className="font-medium text-blue-700">Gemini 2.5 Flash</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">Status:</span>
+                <span className="flex items-center text-green-600">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                  Online
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4">
+            <button
+              onClick={createNewChat}
+              className="w-full mb-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
+            >
+              ➕ Start New Chat
+            </button>
+            
+            <div className="space-y-2">
+              {chatHistory.map((chat) => (
+                <div
+                  key={chat.id}
+                  className={`group p-3 rounded-lg transition-colors ${
+                    chat.id === currentChatId
+                      ? 'bg-blue-100 border border-blue-300'
+                      : 'bg-gray-50 hover:bg-gray-100'
+                  }`}
+                >
+                  <div 
+                    onClick={() => loadChatSession(chat.id)}
+                    className="cursor-pointer"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-medium text-gray-900 text-sm truncate">
+                        {chat.title}
+                      </h3>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs text-gray-500">
+                          {chat.messageCount} msgs
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteChatSession(chat.id)
+                          }}
+                          className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 transition-opacity"
+                          title="Delete chat"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {new Date(chat.lastMessageAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              
+              {chatHistory.length === 0 && (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 text-4xl mb-2">💬</div>
+                  <p className="text-gray-500 text-sm">
+                    No chat history yet.
+                  </p>
+                  <p className="text-gray-400 text-xs mt-1">
+                    Start a conversation to see it here!
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className={`flex-1 flex flex-col ${showChatSidebar ? '' : ''}`}>
+        <div className="max-w-4xl mx-auto w-full p-6">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-blue-500 rounded-full flex items-center justify-center text-white text-3xl mx-auto mb-4">
@@ -391,7 +830,30 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">{getCheckInTitle()}</h1>
           <p className="text-gray-600">Your daily conversation with Zeno</p>
+          
+          {/* Chat Management Buttons */}
+          <div className="flex justify-center space-x-3 mt-4">
+            <button
+              onClick={() => setShowChatSidebar(!showChatSidebar)}
+              className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+            >
+              {showChatSidebar ? '📋 Hide Chat History' : '📋 Show Chat History'}
+            </button>
+            <button
+              onClick={createNewChat}
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm"
+            >
+              ➕ New Chat
+            </button>
+            <button
+              onClick={cleanChat}
+              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
+            >
+              🗑️ Clean Chat
+            </button>
+          </div>
         </div>
+
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Chat Interface */}
@@ -430,10 +892,10 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
                       className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                        className={`px-4 py-3 rounded-lg ${
                           message.role === 'user'
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-white text-gray-900 border border-gray-200'
+                            ? 'bg-blue-500 text-white max-w-md'
+                            : 'bg-white text-gray-900 border border-gray-200 w-full max-w-none'
                         }`}
                       >
                         <p className="text-sm leading-relaxed whitespace-pre-wrap">
@@ -442,6 +904,21 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
                         <p className="text-xs opacity-70 mt-1">
                           {new Date(message.timestamp).toLocaleTimeString()}
                         </p>
+                        
+                        {/* Add Tasks Button for Zeno messages with task details */}
+                        {message.role === 'zeno' && 
+                         pendingTaskCreation && 
+                         pendingTaskCreation.messageId === message.id && (
+                          <div className="mt-2 pt-2 border-t border-gray-200">
+                            <button
+                              onClick={createTasksFromPending}
+                              disabled={isTyping}
+                              className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:opacity-50"
+                            >
+                              📋 Add Tasks to Task List ({pendingTaskCreation.tasks.length} tasks)
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -476,55 +953,159 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
               </div>
             )}
 
-            {/* Clarification Questions */}
+            {/* Clarification Questions - SHOW ONLY 1 QUESTION */}
             {pendingQuestions.length > 0 && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <h4 className="text-sm font-medium text-blue-800 mb-2">❓ Quick Questions</h4>
-                <div className="space-y-2">
-                  {pendingQuestions.slice(0, 2).map((question) => (
-                    <div key={question.id} className="text-sm">
-                      <p className="text-blue-700 mb-2">{question.question}</p>
-                      {question.expectedAnswerType === 'choice' && question.options ? (
-                        <div className="flex flex-wrap gap-1">
-                          {question.options.map((option, index) => (
+                <h4 className="text-sm font-medium text-blue-800 mb-2">❓ Quick Question</h4>
+                <div className="text-sm">
+                  {(() => {
+                    const question = pendingQuestions[0] // Show only the first question
+                    return (
+                      <div>
+                        <p className="text-blue-700 mb-2">{question.question}</p>
+                        {question.expectedAnswerType === 'choice' && question.options ? (
+                          <div className="flex flex-wrap gap-1">
+                            {question.options.map((option, index) => (
+                              <button
+                                key={index}
+                                onClick={() => answerClarificationQuestion(question.id, option)}
+                                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                              >
+                                {option}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex space-x-2">
+                            <input
+                              type="text"
+                              placeholder="Your answer..."
+                              className="flex-1 px-2 py-1 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              onKeyPress={(e) => {
+                                if (e.key === 'Enter') {
+                                  answerClarificationQuestion(question.id, e.currentTarget.value)
+                                  e.currentTarget.value = ''
+                                }
+                              }}
+                            />
                             <button
-                              key={index}
-                              onClick={() => answerClarificationQuestion(question.id, option)}
-                              className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                              onClick={(e) => {
+                                const input = e.currentTarget.previousElementSibling as HTMLInputElement
+                                if (input.value.trim()) {
+                                  answerClarificationQuestion(question.id, input.value.trim())
+                                  input.value = ''
+                                }
+                              }}
+                              className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                             >
-                              {option}
+                              Send
                             </button>
-                          ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* Daily Plan Confirmation */}
+            {showPlanConfirmation && dailyPlan && (
+              <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <h4 className="text-lg font-semibold text-green-800 mb-3">📅 Your Daily Schedule</h4>
+                <div className="space-y-3">
+                  {dailyPlan.timeBlocks.map((block) => (
+                    <div key={block.id} className={`p-3 rounded-lg border ${
+                      block.isBreak 
+                        ? 'bg-gray-100 border-gray-300' 
+                        : 'bg-white border-green-300'
+                    }`}>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-medium text-gray-800">
+                              {block.startTime} - {block.endTime}
+                            </span>
+                            <span className={`px-2 py-1 text-xs rounded ${
+                              block.priority === 1 ? 'bg-red-100 text-red-700' :
+                              block.priority === 2 ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-green-100 text-green-700'
+                            }`}>
+                              {block.priority === 1 ? 'High' : block.priority === 2 ? 'Medium' : 'Low'} Priority
+                            </span>
+                          </div>
+                          <h5 className="font-semibold text-gray-800 mt-1">{block.title}</h5>
+                          <p className="text-sm text-gray-600 mt-1">{block.description}</p>
+                          {block.tasks.length > 0 && (
+                            <div className="mt-2">
+                              <p className="text-xs font-medium text-gray-700 mb-1">Tasks:</p>
+                              <ul className="text-xs text-gray-600 space-y-1">
+                                {block.tasks.map((task) => (
+                                  <li key={task.id} className="flex items-center space-x-2">
+                                    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                                    <span>{task.title}</span>
+                                    <span className="text-gray-500">({task.estimatedDuration}min)</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <div className="flex space-x-2">
-                          <input
-                            type="text"
-                            placeholder="Your answer..."
-                            className="flex-1 px-2 py-1 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            onKeyPress={(e) => {
-                              if (e.key === 'Enter') {
-                                answerClarificationQuestion(question.id, e.currentTarget.value)
-                                e.currentTarget.value = ''
-                              }
-                            }}
-                          />
-                          <button
-                            onClick={(e) => {
-                              const input = e.currentTarget.previousElementSibling as HTMLInputElement
-                              if (input.value.trim()) {
-                                answerClarificationQuestion(question.id, input.value.trim())
-                                input.value = ''
-                              }
-                            }}
-                            className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                          >
-                            Send
-                          </button>
-                        </div>
-                      )}
+                      </div>
                     </div>
                   ))}
+                </div>
+                <div className="mt-4 flex space-x-3">
+                  <button
+                    onClick={() => confirmDailyPlan(true)}
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium"
+                  >
+                    ✅ Approve Plan
+                  </button>
+                  <button
+                    onClick={() => confirmDailyPlan(false)}
+                    className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors font-medium"
+                  >
+                    ❌ Reject Plan
+                  </button>
+                </div>
+                
+                {/* Task Board Integration */}
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-700 mb-2">
+                    💡 <strong>Pro Tip:</strong> After approving this plan, you can view and manage these tasks in the Zeno Task Board for better organization and tracking.
+                  </p>
+                  <button
+                    onClick={() => {
+                      // Navigate to task board or show task board
+                      window.location.hash = '#taskboard'
+                    }}
+                    className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                  >
+                    📋 Open Task Board
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Task Board Button - Show after tasks are created */}
+            {tasksCreated && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-medium text-green-800 mb-1">🎉 Tasks Created Successfully!</h4>
+                    <p className="text-xs text-green-700">Your daily tasks are now ready to be managed in the Task Board.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      // Navigate to task board
+                      window.location.hash = '#taskboard'
+                      setTasksCreated(false) // Reset the flag
+                    }}
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium text-sm"
+                  >
+                    📋 Open Task Board
+                  </button>
                 </div>
               </div>
             )}
@@ -743,6 +1324,7 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
               🌙 Evening
             </button>
           </div>
+        </div>
         </div>
       </div>
     </div>

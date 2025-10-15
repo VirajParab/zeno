@@ -56,7 +56,7 @@ export interface ConversationContext {
 }
 
 export interface ExtractedEntity {
-  type: 'goal' | 'timeline' | 'category' | 'priority' | 'resource'
+  type: 'goal' | 'timeline' | 'category' | 'priority' | 'resource' | 'task'
   value: string
   confidence: number
   position: { start: number; end: number }
@@ -118,6 +118,7 @@ export interface ConversationIntent {
 
 export interface ConversationalResponse {
   message: string
+  user_messages?: string[] // New field for user messages
   extractedData?: {
     goals: Partial<GoalIntent>[]
     tasks: ExtractedTask[]
