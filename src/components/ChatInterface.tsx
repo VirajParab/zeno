@@ -22,9 +22,8 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [chatHistory, setChatHistory] = useState<ChatSession[]>([])
   const [currentChatId, setCurrentChatId] = useState<string>(() => {
-    // Try to restore from localStorage
-    const savedChatId = localStorage.getItem('zeno-current-chat-id')
-    return savedChatId || 'all-messages'
+    // Don't restore from localStorage - always start fresh
+    return 'new-chat'
   })
   const [showChatSidebar, setShowChatSidebar] = useState(true)
   const [tasks, setTasks] = useState<Task[]>([])
@@ -46,12 +45,18 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     loadTasks()
   }, [database])
 
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
   useEffect(() => {
     scrollToBottom()
   }, [messages])
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  const startNewChat = () => {
+    setCurrentChatId('new-chat')
+    setMessages([])
+    console.log('Started new chat')
   }
 
   const loadAPIKeys = async () => {
@@ -286,16 +291,18 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       const sessions = await database.getChatSessions()
       console.log('Loaded chat sessions:', sessions)
       
-      // Debug all messages to see what's in the database
-      await debugAllMessages()
-      
       // Fix message counts for all sessions by counting actual messages
       const updatedSessions = []
       for (const session of sessions) {
         try {
-          console.log(`Checking session: ${session.title} (ID: ${session.id})`)
+          console.log(`=== CHECKING SESSION ===`)
+          console.log(`Session: ${session.title} (ID: ${session.id})`)
+          console.log(`Session ID type: ${typeof session.id}`)
+          console.log(`Current message_count: ${session.message_count}`)
+          
           const actualMessages = await database.getMessagesByChatSession(session.id)
           console.log(`Found ${actualMessages.length} messages for session ${session.id}`)
+          console.log(`Messages:`, actualMessages.map(m => ({ id: m.id, chat_session_id: m.chat_session_id, content: m.content.substring(0, 50) + '...' })))
           
           if (actualMessages.length !== session.message_count) {
             console.log(`Fixing message count for ${session.title}: ${session.message_count} -> ${actualMessages.length}`)
@@ -315,30 +322,8 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       
       setChatHistory(updatedSessions)
       
-      // Restore the saved chat session or auto-load the most recent one
-      const savedChatId = localStorage.getItem('zeno-current-chat-id')
-      if (savedChatId && savedChatId !== 'all-messages') {
-        // Check if the saved chat session still exists
-        const savedSession = sessions.find(s => s.id === savedChatId)
-        if (savedSession) {
-          console.log('Restoring saved chat session:', savedSession.title)
-          await loadChatSession(savedChatId)
-        } else {
-          console.log('Saved chat session not found, loading most recent')
-          if (sessions.length > 0) {
-            await loadChatSession(sessions[0].id)
-          }
-        }
-      } else if (sessions.length > 0 && messages.length === 0) {
-        // Auto-load most recent session if no saved session
-        const mostRecentSession = sessions[0]
-        console.log('Auto-loading most recent session:', mostRecentSession.title)
-        await loadChatSession(mostRecentSession.id)
-      } else if (sessions.length === 0) {
-        console.log('No chat sessions found, staying in all-messages mode')
-      } else {
-        console.log('Preserving current chat session:', currentChatId)
-      }
+      // Don't auto-load any session - let user choose
+      console.log('Chat sessions loaded, waiting for user to select a chat')
     } catch (error) {
       console.error('Failed to load chat sessions:', error)
     }
@@ -359,8 +344,9 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     setInputMessage('')
     setIsLoading(true)
 
-    // Update chat title if this is the first user message or if we're in "all-messages" mode
-    if (messages.length === 0 || currentChatId === 'all-messages') {
+    // Create a new chat session if this is the first message or if we're starting a new chat
+    let actualChatId = currentChatId
+    if (messages.length === 0 || currentChatId === 'new-chat') {
       const title = generateChatTitle()
       // Create a new chat session for the first message
       const newChatId = `chat-${Date.now()}`
@@ -372,9 +358,17 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       }
       
       try {
+        console.log(`=== CREATING CHAT SESSION ===`)
+        console.log(`newSession:`, newSession)
         const createdSession = await database.createChatSession(newSession)
+        console.log('Created chat session:', createdSession)
+        console.log('Created session ID type:', typeof createdSession.id)
+        console.log('Created session ID value:', createdSession.id)
         setChatHistory(prev => [createdSession, ...prev])
         setCurrentChatId(createdSession.id)
+        actualChatId = createdSession.id // Use the real chat session ID
+        console.log('Set currentChatId to:', createdSession.id)
+        console.log('Set actualChatId to:', actualChatId)
       } catch (error) {
         console.error('Failed to create chat session:', error)
         // Fallback to local state if database fails
@@ -389,23 +383,25 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
         }
         setChatHistory(prev => [fallbackSession, ...prev])
         setCurrentChatId(newChatId)
+        actualChatId = newChatId // Use the fallback ID
+        console.log('Fallback: Set currentChatId to:', newChatId)
       }
     }
 
     // Store user message in database
     try {
-      console.log(`Storing user message with chat_session_id: ${currentChatId}`)
+      console.log(`Storing user message with chat_session_id: ${actualChatId}`)
       await database.createMessage({
         user_id: 'demo-user-123',
         role: 'user',
         content: inputMessage,
-        chat_session_id: currentChatId.toString(), // Ensure string type
+        chat_session_id: actualChatId.toString(), // Use the actual chat session ID
         model: selectedModel,
         provider: selectedProvider,
         tokens: 0,
         cost: 0
       })
-      console.log('User message stored successfully')
+      console.log(`Successfully stored user message with chat_session_id: ${actualChatId}`)
     } catch (error) {
       console.error('Failed to store user message:', error)
     }
@@ -442,26 +438,53 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       
       // Store assistant message in database
       try {
+        console.log(`=== STORING ASSISTANT MESSAGE ===`)
+        console.log(`actualChatId: ${actualChatId}`)
+        console.log(`actualChatId type: ${typeof actualChatId}`)
+        console.log(`content: ${displayMessage.substring(0, 100)}...`)
+        
         await database.createMessage({
           user_id: 'demo-user-123',
           role: 'assistant',
           content: displayMessage,
-          chat_session_id: currentChatId.toString(),
+          chat_session_id: currentChatId.toString(), // Use the actual chat session ID
           model: 'gemini-2.5-flash',
           provider: selectedProvider,
           tokens: 0,
           cost: 0
         })
+        console.log(`Successfully stored assistant message with chat_session_id: ${actualChatId}`)
       } catch (error) {
         console.error('Failed to store assistant message:', error)
       }
       
       // Update chat message count by counting actual messages
       try {
-        console.log(`Updating message count for chat session: ${currentChatId}`)
-        const actualMessages = await database.getMessagesByChatSession(currentChatId)
-        console.log(`Found ${actualMessages.length} messages for session ${currentChatId}`)
-        await database.updateChatSession(currentChatId, {
+        console.log(`=== DEBUGGING CHAT UPDATE ===`)
+        console.log(`actualChatId: ${actualChatId}`)
+        console.log(`typeof actualChatId: ${typeof actualChatId}`)
+        console.log(`Updating message count for chat session: ${actualChatId}`)
+        
+        // Skip update if we're still in 'new-chat' mode
+        if (actualChatId === 'new-chat') {
+          console.log(`Skipping update for placeholder chat session: ${actualChatId}`)
+          return
+        }
+        
+        // First check if the chat session exists
+        const existingSession = await database.getChatSession(actualChatId)
+        console.log(`existingSession:`, existingSession)
+        console.log(`existingSession ID:`, existingSession?.id)
+        console.log(`existingSession ID type:`, typeof existingSession?.id)
+        if (!existingSession) {
+          console.error(`Chat session ${actualChatId} not found, skipping update`)
+          return
+        }
+        
+        const actualMessages = await database.getMessagesByChatSession(actualChatId)
+        console.log(`Found ${actualMessages.length} messages for session ${actualChatId}`)
+        
+        await database.updateChatSession(actualChatId, {
           last_message_at: new Date().toISOString(),
           message_count: actualMessages.length
         })
@@ -473,7 +496,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
         // Fallback to local state update
         setChatHistory(prev => 
           prev.map(chat => 
-            chat.id === currentChatId 
+            chat.id === actualChatId 
               ? { ...chat, last_message_at: new Date().toISOString(), message_count: chat.message_count + 2 }
               : chat
           )
@@ -507,7 +530,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
           user_id: 'demo-user-123',
           role: 'assistant',
           content: 'Sorry, I encountered an error. Please check your API key configuration.',
-          chat_session_id: currentChatId.toString(),
+          chat_session_id: currentChatId.toString(), // Use the actual chat session ID
           model: selectedModel,
           provider: selectedProvider,
           tokens: 0,
@@ -519,8 +542,21 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       
       // Update chat message count for error message too
       try {
-        const actualMessages = await database.getMessagesByChatSession(currentChatId)
-        await database.updateChatSession(currentChatId, {
+        // Skip update if we're still in 'new-chat' mode
+        if (actualChatId === 'new-chat') {
+          console.log(`Skipping error message count update for placeholder chat session: ${actualChatId}`)
+          return
+        }
+        
+        // First check if the chat session exists
+        const existingSession = await database.getChatSession(actualChatId)
+        if (!existingSession) {
+          console.error(`Chat session ${actualChatId} not found, skipping error message count update`)
+          return
+        }
+        
+        const actualMessages = await database.getMessagesByChatSession(actualChatId)
+        await database.updateChatSession(actualChatId, {
           last_message_at: new Date().toISOString(),
           message_count: actualMessages.length
         })
@@ -531,7 +567,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
         // Fallback to local state update
         setChatHistory(prev => 
           prev.map(chat => 
-            chat.id === currentChatId 
+            chat.id === actualChatId 
               ? { ...chat, last_message_at: new Date().toISOString(), message_count: chat.message_count + 2 }
               : chat
           )
@@ -604,7 +640,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       setChatHistory(prev => prev.filter(chat => chat.id !== chatId))
       
       if (chatId === currentChatId) {
-        setCurrentChatId('all-messages')
+        setCurrentChatId('new-chat')
         setMessages([])
       }
     } catch (error) {
@@ -613,7 +649,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       setChatHistory(prev => prev.filter(chat => chat.id !== chatId))
       
       if (chatId === currentChatId) {
-        setCurrentChatId('all-messages')
+        setCurrentChatId('new-chat')
         setMessages([])
       }
     }
@@ -654,20 +690,11 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
   const loadChatSession = async (chatId: string) => {
     console.log('Loading chat session:', chatId)
     setCurrentChatId(chatId)
-    // Save to localStorage to persist across tab switches
-    localStorage.setItem('zeno-current-chat-id', chatId)
     
     try {
-      let chatMessages
-      if (chatId === 'all-messages') {
-        // Load all messages when "All Messages" is selected
-        chatMessages = await database.getMessages()
-        console.log('Loaded all messages:', chatMessages.length)
-      } else {
-        // Load messages for this specific chat session
-        chatMessages = await database.getMessagesByChatSession(chatId)
-        console.log('Loaded messages for chat session:', chatId, chatMessages.length)
-      }
+      // Load messages for this specific chat session only
+      const chatMessages = await database.getMessagesByChatSession(chatId)
+      console.log('Loaded messages for chat session:', chatId, chatMessages.length)
       
       // Transform database messages to the format expected by the UI
       const uiMessages = chatMessages.map(msg => ({
@@ -810,6 +837,19 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
         })
         
         // Update chat message count
+        // Skip update if we're still in 'new-chat' mode
+        if (currentChatId === 'new-chat') {
+          console.log(`Skipping success message count update for placeholder chat session: ${currentChatId}`)
+          return
+        }
+        
+        // First check if the chat session exists
+        const existingSession = await database.getChatSession(currentChatId)
+        if (!existingSession) {
+          console.error(`Chat session ${currentChatId} not found, skipping success message count update`)
+          return
+        }
+        
         const actualMessages = await database.getMessagesByChatSession(currentChatId)
         await database.updateChatSession(currentChatId, {
           last_message_at: new Date().toISOString(),
@@ -850,6 +890,19 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
         })
         
         // Update chat message count
+        // Skip update if we're still in 'new-chat' mode
+        if (currentChatId === 'new-chat') {
+          console.log(`Skipping task creation error message count update for placeholder chat session: ${currentChatId}`)
+          return
+        }
+        
+        // First check if the chat session exists
+        const existingSession = await database.getChatSession(currentChatId)
+        if (!existingSession) {
+          console.error(`Chat session ${currentChatId} not found, skipping task creation error message count update`)
+          return
+        }
+        
         const actualMessages = await database.getMessagesByChatSession(currentChatId)
         await database.updateChatSession(currentChatId, {
           last_message_at: new Date().toISOString(),
@@ -907,39 +960,6 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
             </button>
             
             <div className="space-y-2">
-              {/* All Messages Option */}
-              <div
-                className={`group p-3 rounded-lg transition-colors ${
-                  currentChatId === 'all-messages'
-                    ? 'bg-blue-100 border border-blue-300'
-                    : 'bg-gray-50 hover:bg-gray-100'
-                }`}
-              >
-                <div 
-                  onClick={() => loadChatSession('all-messages')}
-                  className="cursor-pointer"
-                >
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-medium text-gray-900 text-sm truncate">
-                      📋 {new Date().toLocaleDateString('en-US', { 
-                        weekday: 'long', 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </h3>
-                    <span className="text-xs text-gray-500">
-                      All conversations
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    View all AI messages
-                  </p>
-                </div>
-              </div>
-              
               {chatHistory.map((chat) => (
                 <div
                   key={chat.id}
@@ -1054,10 +1074,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
             <div>
               <div className="flex items-center justify-between">
                 <h1 className="text-lg font-semibold text-gray-900">
-                  {currentChatId === 'all-messages' 
-                    ? 'All AI Conversations' 
-                    : chatHistory.find(chat => chat.id === currentChatId)?.title || 'AI Assistant'
-                  }
+                  {chatHistory.find(chat => chat.id === currentChatId)?.title || 'AI Assistant'}
                 </h1>
                 <button 
                   onClick={debugAllMessages}
@@ -1068,10 +1085,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
                 </button>
               </div>
               <p className="text-sm text-gray-500">
-                {currentChatId === 'all-messages' 
-                  ? `${messages.length} total messages` 
-                  : `${selectedModel} • ${selectedProvider}`
-                }
+                {selectedModel} • {selectedProvider}
               </p>
             </div>
           </div>

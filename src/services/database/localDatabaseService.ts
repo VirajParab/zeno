@@ -197,7 +197,25 @@ export class LocalDatabaseService implements DatabaseInterface {
   }
 
   async getChatSession(id: string): Promise<ChatSession | null> {
-    return await localDB.chatSessions.get(id) || null
+    // Try to get by string ID first, then by number ID
+    let chatSession = await localDB.chatSessions.get(id)
+    if (!chatSession) {
+      // Try with numeric ID
+      const numericId = parseInt(id)
+      if (!isNaN(numericId)) {
+        chatSession = await localDB.chatSessions.get(numericId)
+      }
+    }
+    
+    if (!chatSession) {
+      return null
+    }
+    
+    // Convert ID to string for consistency
+    return {
+      ...chatSession,
+      id: chatSession.id.toString()
+    }
   }
 
   async createChatSession(chatSessionData: Omit<ChatSession, 'id' | 'created_at' | 'updated_at'>): Promise<ChatSession> {
@@ -231,7 +249,16 @@ export class LocalDatabaseService implements DatabaseInterface {
   }
 
   async updateChatSession(id: string, updates: Partial<ChatSession>): Promise<ChatSession> {
-    const existingChatSession = await localDB.chatSessions.get(id)
+    // Try to get by string ID first, then by number ID
+    let existingChatSession = await localDB.chatSessions.get(id)
+    if (!existingChatSession) {
+      // Try with numeric ID
+      const numericId = parseInt(id)
+      if (!isNaN(numericId)) {
+        existingChatSession = await localDB.chatSessions.get(numericId)
+      }
+    }
+    
     if (!existingChatSession) {
       throw new Error('Chat session not found')
     }
