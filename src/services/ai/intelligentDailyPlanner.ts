@@ -77,12 +77,11 @@ export class IntelligentDailyPlanner {
   async generateDailyPlan(
     userMessage: string,
     availableHours: number = 8,
-    existingTasks: Task[] = [],
-    userProfile?: any
+    _existingTasks: Task[] = []
   ): Promise<DailyPlan> {
     try {
       // Extract focus areas and goals from user message
-      const extractedInfo = await this.extractPlanningInfo(userMessage, existingTasks)
+      const extractedInfo = await this.extractPlanningInfo(userMessage)
       
       // Generate intelligent time blocks with specific tasks
       const timeBlocks = await this.generateTimeBlocks(extractedInfo, availableHours)
@@ -110,7 +109,7 @@ export class IntelligentDailyPlanner {
   /**
    * Extract planning information from user message and existing tasks
    */
-  private async extractPlanningInfo(userMessage: string, existingTasks: Task[]): Promise<any> {
+  private async extractPlanningInfo(userMessage: string): Promise<any> {
     const prompt = `
 Analyze this user message and extract planning information:
 
@@ -460,7 +459,7 @@ Format it nicely with clear time blocks and ask "Does this schedule work for you
       }
       
       // Find or create focus area
-      let area = focusAreas.find(a => a.name === areaName)
+      let area: any = focusAreas.find(a => a.name === areaName)
       if (!area) {
         area = {
           name: areaName,

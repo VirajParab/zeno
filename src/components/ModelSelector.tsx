@@ -101,9 +101,6 @@ export function ModelSelector({ onModelChange, className = '' }: ModelSelectorPr
     }
   }
 
-  const getActiveKeyForProvider = (provider: AIProvider) => {
-    return apiKeys.find(key => key.provider === provider && key.is_active)
-  }
 
   const getSelectedModelInfo = () => {
     return availableModels.find(model => model.id === selectedModel)

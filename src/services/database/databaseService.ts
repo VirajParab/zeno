@@ -1,4 +1,4 @@
-import { DatabaseInterface, Task, Message, SyncConflict, DatabaseConfig, APIKey, ChatSession } from './types'
+import { DatabaseInterface, Task, Message, SyncConflict, DatabaseConfig, APIKey, ChatSession, Column, Reminder } from './types'
 import { LocalDatabaseService } from './localDatabaseService'
 import { CloudDatabaseService } from './cloudDatabaseService'
 
@@ -247,6 +247,114 @@ export class SyncDatabaseService implements DatabaseInterface {
         await this.cloudService.deleteAPIKey(id)
       } catch (error) {
         console.error('Failed to sync API key deletion to cloud:', error)
+      }
+    }
+  }
+
+  // Column operations - always work with local first, sync to cloud
+  async getColumns(): Promise<Column[]> {
+    return await this.localService.getColumns()
+  }
+
+  async getColumn(id: string): Promise<Column | null> {
+    return await this.localService.getColumn(id)
+  }
+
+  async createColumn(columnData: Omit<Column, 'id' | 'created_at' | 'updated_at'>): Promise<Column> {
+    const column = await this.localService.createColumn(columnData)
+    
+    // Try to sync to cloud if online
+    if (this.isOnline()) {
+      try {
+        await this.cloudService.createColumn(columnData)
+        await this.localService.updateColumn(column.id, { sync_status: 'synced' })
+      } catch (error) {
+        console.error('Failed to sync column to cloud:', error)
+      }
+    }
+    
+    return column
+  }
+
+  async updateColumn(id: string, updates: Partial<Column>): Promise<Column> {
+    const column = await this.localService.updateColumn(id, updates)
+    
+    // Try to sync to cloud if online
+    if (this.isOnline()) {
+      try {
+        await this.cloudService.updateColumn(id, updates)
+        await this.localService.updateColumn(id, { sync_status: 'synced' })
+      } catch (error) {
+        console.error('Failed to sync column update to cloud:', error)
+      }
+    }
+    
+    return column
+  }
+
+  async deleteColumn(id: string): Promise<void> {
+    await this.localService.deleteColumn(id)
+    
+    // Try to sync to cloud if online
+    if (this.isOnline()) {
+      try {
+        await this.cloudService.deleteColumn(id)
+      } catch (error) {
+        console.error('Failed to sync column deletion to cloud:', error)
+      }
+    }
+  }
+
+  // Reminder operations - always work with local first, sync to cloud
+  async getReminders(): Promise<Reminder[]> {
+    return await this.localService.getReminders()
+  }
+
+  async getReminder(id: string): Promise<Reminder | null> {
+    return await this.localService.getReminder(id)
+  }
+
+  async createReminder(reminderData: Omit<Reminder, 'id' | 'created_at' | 'updated_at'>): Promise<Reminder> {
+    const reminder = await this.localService.createReminder(reminderData)
+    
+    // Try to sync to cloud if online
+    if (this.isOnline()) {
+      try {
+        await this.cloudService.createReminder(reminderData)
+        await this.localService.updateReminder(reminder.id, { sync_status: 'synced' })
+      } catch (error) {
+        console.error('Failed to sync reminder to cloud:', error)
+      }
+    }
+    
+    return reminder
+  }
+
+  async updateReminder(id: string, updates: Partial<Reminder>): Promise<Reminder> {
+    const reminder = await this.localService.updateReminder(id, updates)
+    
+    // Try to sync to cloud if online
+    if (this.isOnline()) {
+      try {
+        await this.cloudService.updateReminder(id, updates)
+        await this.localService.updateReminder(id, { sync_status: 'synced' })
+      } catch (error) {
+        console.error('Failed to sync reminder update to cloud:', error)
+      }
+    }
+    
+    return reminder
+  }
+
+  async deleteReminder(id: string): Promise<void> {
+    await this.localService.deleteReminder(id)
+    
+    // Try to sync to cloud if online
+    if (this.isOnline()) {
+      try {
+        await this.cloudService.deleteReminder(id)
+      } catch (error) {
+        console.error('Failed to sync reminder deletion to cloud:', error)
       }
     }
   }

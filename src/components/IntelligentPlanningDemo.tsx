@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { IntelligentDailyPlanner, DailyPlan, DailyPlanConfirmation } from '../services/ai/intelligentDailyPlanner'
 import { AIService } from '../services/ai/aiService'
 import { useDatabase } from '../services/database/DatabaseContext'

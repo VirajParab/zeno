@@ -41,7 +41,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ userId }) => {
         user_id: userId,
         title,
         status: 'todo',
-        priority: 3
+        priority: 3,
+        column_id: 'default',
+        position: 0
       })
       fetchTasks() // Refresh the list
     } catch (error) {

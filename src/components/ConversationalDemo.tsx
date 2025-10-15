@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { ZenoConversationalAI } from '../services/ai/zenoConversationalAI'
 import { AIService } from '../services/ai/aiService'
 import { useDatabase } from '../services/database/DatabaseContext'
-import { ConversationalResponse, GoalIntent, ClarificationQuestion } from '../services/ai/conversationalTypes'
+import { GoalIntent, ClarificationQuestion } from '../services/ai/conversationalTypes'
 
 interface ConversationalDemoProps {
   userProfile: any
@@ -53,8 +53,8 @@ const ConversationalDemo: React.FC<ConversationalDemoProps> = ({ userProfile }) 
       )
 
       // Handle extracted goals
-      if (response.extractedData?.goals.length > 0) {
-        setExtractedGoals(prev => [...prev, ...response.extractedData.goals as GoalIntent[]])
+      if (response.extractedData?.goals && response.extractedData.goals.length > 0) {
+        setExtractedGoals(prev => [...prev, ...response.extractedData!.goals as GoalIntent[]])
       }
 
       // Handle follow-up questions
@@ -99,8 +99,8 @@ const ConversationalDemo: React.FC<ConversationalDemoProps> = ({ userProfile }) 
       setPendingQuestions(prev => prev.filter(q => q.id !== questionId))
 
       // Add follow-up questions
-      if (result.followUpQuestions?.length > 0) {
-        setPendingQuestions(prev => [...prev, ...result.followUpQuestions])
+      if (result.followUpQuestions && result.followUpQuestions.length > 0) {
+        setPendingQuestions(prev => [...prev, ...result.followUpQuestions!])
       }
 
       // Add response

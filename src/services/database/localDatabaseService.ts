@@ -48,33 +48,23 @@ export class LocalDatabaseService implements DatabaseInterface {
 
   async createTask(taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>): Promise<Task> {
     const now = new Date().toISOString()
+    const id = crypto.randomUUID()
     const taskDataWithTimestamps = {
       ...taskData,
+      id,
       created_at: now,
       updated_at: now,
       sync_status: 'pending' as const
     }
 
-    // Let Dexie auto-generate the ID - don't include id field
-    const id = await localDB.tasks.add(taskDataWithTimestamps)
-    
-    // Fetch the created task to get the auto-generated ID
-    const createdTask = await localDB.tasks.get(id)
-    if (!createdTask) {
-      throw new Error('Failed to create task')
-    }
-    
-    const task: Task = {
-      ...createdTask,
-      id: createdTask.id.toString()
-    }
+    await localDB.tasks.add(taskDataWithTimestamps)
     
     // Add to sync queue if online
     if (this.isOnline()) {
-      await this.addToSyncQueue('tasks', 'create', task)
+      await this.addToSyncQueue('tasks', 'create', taskDataWithTimestamps)
     }
 
-    return task
+    return taskDataWithTimestamps
   }
 
   async updateTask(id: string, updates: Partial<Task>): Promise<Task> {
@@ -162,37 +152,25 @@ export class LocalDatabaseService implements DatabaseInterface {
     console.log(`chat_session_id type:`, typeof messageData.chat_session_id)
     
     const now = new Date().toISOString()
+    const id = crypto.randomUUID()
     const messageDataWithTimestamp = {
       ...messageData,
+      id,
       inserted_at: now,
       sync_status: 'pending' as const
     }
 
-    // Let Dexie auto-generate the ID - don't include id field
-    const id = await localDB.messages.add(messageDataWithTimestamp)
+    await localDB.messages.add(messageDataWithTimestamp)
     console.log(`Created message with ID: ${id}`)
     
-    // Fetch the created message to get the auto-generated ID
-    const createdMessage = await localDB.messages.get(id)
-    if (!createdMessage) {
-      throw new Error('Failed to create message')
-    }
-    
-    console.log(`Retrieved created message:`, createdMessage)
-    
-    const message: Message = {
-      ...createdMessage,
-      id: createdMessage.id.toString()
-    }
-    
-    console.log(`Final message:`, message)
+    console.log(`Final message:`, messageDataWithTimestamp)
     
     // Add to sync queue if online
     if (this.isOnline()) {
-      await this.addToSyncQueue('messages', 'create', message)
+      await this.addToSyncQueue('messages', 'create', messageDataWithTimestamp)
     }
 
-    return message
+    return messageDataWithTimestamp
   }
 
   async updateMessage(id: string, updates: Partial<Message>): Promise<Message> {
@@ -259,32 +237,23 @@ export class LocalDatabaseService implements DatabaseInterface {
 
   async createChatSession(chatSessionData: Omit<ChatSession, 'id' | 'created_at' | 'updated_at'>): Promise<ChatSession> {
     const now = new Date().toISOString()
+    const id = crypto.randomUUID()
     const chatSessionDataWithTimestamp = {
       ...chatSessionData,
+      id,
       created_at: now,
       updated_at: now,
       sync_status: 'pending' as const
     }
 
-    const id = await localDB.chatSessions.add(chatSessionDataWithTimestamp)
-    
-    // Fetch the created chat session to get the auto-generated ID
-    const createdChatSession = await localDB.chatSessions.get(id)
-    if (!createdChatSession) {
-      throw new Error('Failed to create chat session')
-    }
-    
-    const chatSession: ChatSession = {
-      ...createdChatSession,
-      id: createdChatSession.id.toString()
-    }
+    await localDB.chatSessions.add(chatSessionDataWithTimestamp)
     
     // Add to sync queue if online
     if (this.isOnline()) {
-      await this.addToSyncQueue('chatSessions', 'create', chatSession)
+      await this.addToSyncQueue('chatSessions', 'create', chatSessionDataWithTimestamp)
     }
 
-    return chatSession
+    return chatSessionDataWithTimestamp
   }
 
   async updateChatSession(id: string, updates: Partial<ChatSession>): Promise<ChatSession> {
@@ -342,29 +311,22 @@ export class LocalDatabaseService implements DatabaseInterface {
 
   async createColumn(columnData: Omit<Column, 'id' | 'created_at' | 'updated_at'>): Promise<Column> {
     const now = new Date().toISOString()
+    const id = crypto.randomUUID()
     const columnDataWithTimestamp = {
       ...columnData,
+      id,
       created_at: now,
       updated_at: now,
       sync_status: 'pending' as const
     }
 
-    const id = await localDB.columns.add(columnDataWithTimestamp)
-    const createdColumn = await localDB.columns.get(id)
-    if (!createdColumn) {
-      throw new Error('Failed to create column')
-    }
-    
-    const column: Column = {
-      ...createdColumn,
-      id: createdColumn.id.toString()
-    }
+    await localDB.columns.add(columnDataWithTimestamp)
     
     if (this.isOnline()) {
-      await this.addToSyncQueue('columns', 'create', column)
+      await this.addToSyncQueue('columns', 'create', columnDataWithTimestamp)
     }
 
-    return column
+    return columnDataWithTimestamp
   }
 
   async updateColumn(id: string, updates: Partial<Column>): Promise<Column> {
@@ -411,29 +373,22 @@ export class LocalDatabaseService implements DatabaseInterface {
 
   async createReminder(reminderData: Omit<Reminder, 'id' | 'created_at' | 'updated_at'>): Promise<Reminder> {
     const now = new Date().toISOString()
+    const id = crypto.randomUUID()
     const reminderDataWithTimestamp = {
       ...reminderData,
+      id,
       created_at: now,
       updated_at: now,
       sync_status: 'pending' as const
     }
 
-    const id = await localDB.reminders.add(reminderDataWithTimestamp)
-    const createdReminder = await localDB.reminders.get(id)
-    if (!createdReminder) {
-      throw new Error('Failed to create reminder')
-    }
-    
-    const reminder: Reminder = {
-      ...createdReminder,
-      id: createdReminder.id.toString()
-    }
+    await localDB.reminders.add(reminderDataWithTimestamp)
     
     if (this.isOnline()) {
-      await this.addToSyncQueue('reminders', 'create', reminder)
+      await this.addToSyncQueue('reminders', 'create', reminderDataWithTimestamp)
     }
 
-    return reminder
+    return reminderDataWithTimestamp
   }
 
   async updateReminder(id: string, updates: Partial<Reminder>): Promise<Reminder> {
@@ -488,34 +443,24 @@ export class LocalDatabaseService implements DatabaseInterface {
 
   async createAPIKey(apiKeyData: Omit<APIKey, 'id' | 'created_at' | 'updated_at'>): Promise<APIKey> {
     const now = new Date().toISOString()
+    const id = crypto.randomUUID()
     const apiKeyDataWithTimestamps = {
       ...apiKeyData,
+      id,
       created_at: now,
       updated_at: now,
       usage_count: 0,
       sync_status: 'pending' as const
     }
 
-    // Let Dexie auto-generate the ID - don't include id field
-    const id = await localDB.apiKeys.add(apiKeyDataWithTimestamps)
-    
-    // Fetch the created API key to get the auto-generated ID
-    const createdAPIKey = await localDB.apiKeys.get(id)
-    if (!createdAPIKey) {
-      throw new Error('Failed to create API key')
-    }
-    
-    const apiKey: APIKey = {
-      ...createdAPIKey,
-      id: createdAPIKey.id.toString()
-    }
+    await localDB.apiKeys.add(apiKeyDataWithTimestamps)
     
     // Add to sync queue if online
     if (this.isOnline()) {
-      await this.addToSyncQueue('api_keys', 'create', apiKey)
+      await this.addToSyncQueue('api_keys', 'create', apiKeyDataWithTimestamps)
     }
 
-    return apiKey
+    return apiKeyDataWithTimestamps
   }
 
   async updateAPIKey(id: string, updates: Partial<APIKey>): Promise<APIKey> {

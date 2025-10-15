@@ -35,7 +35,9 @@ const TaskBoard = () => {
         title: newTaskTitle,
         description: newTaskDescription,
         status: 'todo',
-        priority: 3
+        priority: 3,
+        column_id: 'default',
+        position: 0
       })
       
       setNewTaskTitle('')

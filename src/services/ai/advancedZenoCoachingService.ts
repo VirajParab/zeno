@@ -1,5 +1,4 @@
 import { AIService } from './aiService'
-import { Task, Column, Reminder } from '../database/types'
 
 export interface UserProfile {
   id: string
@@ -105,7 +104,7 @@ export interface CoachingConversation {
 
 export interface ConversationMessage {
   id: string
-  role: 'zeno' | 'user'
+  role: 'assistant' | 'user'
   content: string
   timestamp: string
   metadata?: any
@@ -136,7 +135,7 @@ export class AdvancedZenoCoachingService {
     const welcomeMessage = await this.generateWelcomeMessage(userName)
     conversation.messages.push({
       id: `msg-${Date.now()}`,
-      role: 'zeno',
+      role: 'assistant',
       content: welcomeMessage,
       timestamp: new Date().toISOString()
     })
@@ -160,13 +159,18 @@ Make it feel like talking to a wise, caring friend who's genuinely interested in
 `
 
     try {
-      const response = await this.aiService.chatWithAI({
-        modelId: 'gemini-2.5-flash',
-        temperature: 0.8,
-        maxTokens: 300
-      }, prompt, [], 'You are Zeno, a warm and intelligent AI companion for personal growth.')
+      const response = await this.aiService.chatWithAI(
+        prompt,
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          temperature: 0.8,
+          maxTokens: 300
+        },
+        'You are Zeno, a warm and intelligent AI companion for personal growth.'
+      )
 
-      return response.response
+      return response.content
     } catch (error) {
       return `Hey ${userName}! I'm Zeno — your AI companion for growth 🌱
 
@@ -197,7 +201,7 @@ Ready to explore together? Let's start with understanding what's most important 
     
     const zenoMsg: ConversationMessage = {
       id: `msg-${Date.now()}`,
-      role: 'zeno',
+      role: 'assistant',
       content: zenoResponse.content,
       timestamp: new Date().toISOString(),
       metadata: zenoResponse.metadata
@@ -252,14 +256,19 @@ Respond with JSON:
 `
 
     try {
-      const response = await this.aiService.chatWithAI({
-        modelId: 'gemini-2.5-flash',
-        temperature: 0.8,
-        maxTokens: 500
-      }, prompt, [], 'You are Zeno, conducting a warm onboarding conversation.')
+      const response = await this.aiService.chatWithAI(
+        prompt,
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          temperature: 0.8,
+          maxTokens: 500
+        },
+        'You are Zeno, conducting a warm onboarding conversation.'
+      )
 
       // Parse the AI response
-      const parsedResponse = this.parseAIResponse(response.response)
+      const parsedResponse = this.parseAIResponse(response.content)
       return parsedResponse
     } catch (error) {
       console.error('Failed to generate contextual response:', error)
@@ -330,13 +339,18 @@ Keep it conversational and supportive. If there are overdue tasks, be gentle but
 `
 
     try {
-      const response = await this.aiService.chatWithAI({
-        modelId: 'gemini-2.5-flash',
-        temperature: 0.8,
-        maxTokens: 500
-      }, prompt, [], 'You are Zeno, conducting a warm morning check-in.')
+      const response = await this.aiService.chatWithAI(
+        prompt,
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          temperature: 0.8,
+          maxTokens: 500
+        },
+        'You are Zeno, conducting a warm morning check-in.'
+      )
 
-      return response.response
+      return response.content
     } catch (error) {
       return `Good morning, ${this.userProfile.name}! ☀️
 
@@ -392,13 +406,18 @@ Keep it conversational and supportive.
 `
 
     try {
-      const response = await this.aiService.chatWithAI({
-        modelId: 'gemini-2.5-flash',
-        temperature: 0.8,
-        maxTokens: 400
-      }, prompt, [], 'You are Zeno, conducting a warm morning check-in.')
+      const response = await this.aiService.chatWithAI(
+        prompt,
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          temperature: 0.8,
+          maxTokens: 400
+        },
+        'You are Zeno, conducting a warm morning check-in.'
+      )
 
-      return response.response
+      return response.content
     } catch (error) {
       return `Good morning, ${this.userProfile.name}! ☀️
 
@@ -447,13 +466,18 @@ Keep it brief, supportive, and actionable.
 `
 
     try {
-      const response = await this.aiService.chatWithAI({
-        modelId: 'gemini-2.5-flash',
-        temperature: 0.8,
-        maxTokens: 300
-      }, prompt, [], 'You are Zeno, conducting a supportive midday check-in.')
+      const response = await this.aiService.chatWithAI(
+        prompt,
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          temperature: 0.8,
+          maxTokens: 300
+        },
+        'You are Zeno, conducting a supportive midday check-in.'
+      )
 
-      return response.response
+      return response.content
     } catch (error) {
       return `You've finished ${completedTasks.length} of ${completedTasks.length + remainingTasks.length} key tasks today — awesome! 🎉
 
@@ -493,13 +517,18 @@ Keep it warm, reflective, and supportive.
 `
 
     try {
-      const response = await this.aiService.chatWithAI({
-        modelId: 'gemini-2.5-flash',
-        temperature: 0.8,
-        maxTokens: 400
-      }, prompt, [], 'You are Zeno, conducting a warm evening reflection.')
+      const response = await this.aiService.chatWithAI(
+        prompt,
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          temperature: 0.8,
+          maxTokens: 400
+        },
+        'You are Zeno, conducting a warm evening reflection.'
+      )
 
-      return response.response
+      return response.content
     } catch (error) {
       return `Nice work today, ${this.userProfile.name}! 🌟
 
@@ -546,13 +575,18 @@ Keep it strategic and encouraging.
 `
 
     try {
-      const response = await this.aiService.chatWithAI({
-        modelId: 'gemini-2.5-flash',
-        temperature: 0.7,
-        maxTokens: 400
-      }, prompt, [], 'You are Zeno, conducting a strategic weekly review.')
+      const response = await this.aiService.chatWithAI(
+        prompt,
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          temperature: 0.7,
+          maxTokens: 400
+        },
+        'You are Zeno, conducting a strategic weekly review.'
+      )
 
-      return response.response
+      return response.content
     } catch (error) {
       return `Time for our weekly check-in, ${this.userProfile.name}! 📊
 
@@ -639,13 +673,18 @@ Respond with JSON:
 `
 
     try {
-      const response = await this.aiService.chatWithAI({
-        modelId: 'gemini-2.5-flash',
-        temperature: 0.7,
-        maxTokens: 800
-      }, prompt, [], 'You are Zeno, processing daily check-in responses and managing tasks.')
+      const response = await this.aiService.chatWithAI(
+        prompt,
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          temperature: 0.7,
+          maxTokens: 800
+        },
+        'You are Zeno, processing daily check-in responses and managing tasks.'
+      )
 
-      const parsedResponse = this.parseTaskManagementResponse(response.response)
+      const parsedResponse = this.parseTaskManagementResponse(response.content)
       return parsedResponse
     } catch (error) {
       console.error('Failed to process daily check-in response:', error)

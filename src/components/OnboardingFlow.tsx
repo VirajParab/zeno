@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { ZenoCoachingService, UserProfile } from '../services/ai/zenoCoachingService'
-import { AIService } from '../services/ai/aiService'
 
 interface OnboardingProps {
   onComplete: (profile: UserProfile) => void
@@ -89,11 +88,12 @@ const OnboardingFlow = ({ onComplete, coachingService }: OnboardingProps) => {
   }
 
   const isStepValid = () => {
+    if (!profile) return false
     switch (currentStep) {
-      case 1: return profile.name?.trim().length > 0
+      case 1: return profile?.name?.trim() && profile.name.trim().length > 0
       case 2: return profile.focusAreas && profile.focusAreas.length > 0
       case 3: return profile.intentStyle
-      case 4: return profile.vision?.trim().length > 0
+      case 4: return profile?.vision?.trim() && profile.vision.trim().length > 0
       case 5: return profile.fiveYearGoals && profile.fiveYearGoals.length > 0
       case 6: return true
       default: return false

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useDatabase } from '../services/database/DatabaseContext'
 import { AIService } from '../services/ai/aiService'
 import { ConversationalInputService } from '../services/ai/conversationalInputService'
-import { AIModelConfig, AIProvider, AVAILABLE_MODELS } from '../services/ai/types'
+import { AIProvider, AVAILABLE_MODELS } from '../services/ai/types'
 import { Task, ChatSession } from '../services/database/types'
 import ReactMarkdown from 'react-markdown'
 
@@ -26,7 +26,6 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     return 'new-chat'
   })
   const [showChatSidebar, setShowChatSidebar] = useState(true)
-  const [tasks, setTasks] = useState<Task[]>([])
   const [pendingTaskCreation, setPendingTaskCreation] = useState<{
     messageId: string
     tasks: any[]
@@ -57,11 +56,6 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     scrollToBottom()
   }, [messages])
 
-  const startNewChat = () => {
-    setCurrentChatId('new-chat')
-    setMessages([])
-    console.log('Started new chat')
-  }
 
   const loadAPIKeys = async () => {
     if (!database) return
@@ -159,14 +153,6 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     }
   }
 
-  const getCurrentModelConfig = (): AIModelConfig => {
-    return {
-      provider: selectedProvider,
-      modelId: selectedModel,
-      temperature: 0.7,
-      maxTokens: 400
-    }
-  }
 
   const cleanMessageContent = (content: string, role: string): string => {
     // This function is now only needed for existing messages that were stored with prompts
@@ -739,49 +725,14 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
 
 
   // Helper functions to parse AI response format
-  const parseTimeToMinutes = (timeStr: string): number => {
-    if (!timeStr) return 60 // Default 1 hour
-    
-    const time = timeStr.toLowerCase()
-    if (time.includes('hour')) {
-      const hours = parseFloat(time.match(/(\d+(?:\.\d+)?)/)?.[1] || '1')
-      return hours * 60
-    } else if (time.includes('minute')) {
-      return parseInt(time.match(/(\d+)/)?.[1] || '60')
-    } else if (time.includes('day') || time.includes('throughout')) {
-      return 480 // 8 hours for all-day tasks
-    } else if (time.includes('week')) {
-      return 2400 // 40 hours for weekly tasks
-    }
-    
-    return 60 // Default 1 hour
-  }
 
-  const getPriorityFromStatus = (status: string): number => {
-    if (!status) return 2 // Default medium priority
-    
-    const statusLower = status.toLowerCase()
-    if (statusLower.includes('urgent') || statusLower.includes('high')) return 1
-    if (statusLower.includes('low') || statusLower.includes('optional')) return 3
-    return 2 // Medium priority
-  }
-
-  const getCategoryFromTitle = (title: string): string => {
-    if (!title) return 'personal'
-    
-    const titleLower = title.toLowerCase()
-    if (titleLower.includes('work') || titleLower.includes('project') || titleLower.includes('meeting')) return 'work'
-    if (titleLower.includes('food') || titleLower.includes('exercise') || titleLower.includes('health')) return 'health'
-    if (titleLower.includes('learn') || titleLower.includes('study') || titleLower.includes('course')) return 'learning'
-    if (titleLower.includes('money') || titleLower.includes('budget') || titleLower.includes('finance')) return 'finance'
-    return 'personal'
-  }
 
   const loadTasks = async () => {
     if (!database) return
     try {
       const allTasks = await database.getTasks()
-      setTasks(allTasks)
+      // Tasks are loaded but not stored in state since they're not used in this component
+      console.log('Loaded tasks:', allTasks.length)
     } catch (error) {
       console.error('Failed to load tasks:', error)
     }

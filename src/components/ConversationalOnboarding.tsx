@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
-import { AdvancedZenoCoachingService, CoachingConversation, ConversationMessage, UserProfile } from '../services/ai/advancedZenoCoachingService'
-import { AIService } from '../services/ai/aiService'
+import { AdvancedZenoCoachingService, CoachingConversation, UserProfile } from '../services/ai/advancedZenoCoachingService'
 
 interface ConversationalOnboardingProps {
   onComplete: (profile: UserProfile) => void
@@ -41,7 +40,7 @@ const ConversationalOnboarding = ({ onComplete, coachingService }: Conversationa
 
       // Extract and store information
       if (response.metadata?.extractedInfo) {
-        setExtractedInfo(prev => ({
+        setExtractedInfo((prev: any) => ({
           ...prev,
           ...response.metadata.extractedInfo
         }))
@@ -147,7 +146,7 @@ const ConversationalOnboarding = ({ onComplete, coachingService }: Conversationa
                     : 'bg-gray-100 text-gray-900'
                 }`}>
                   <div className="flex items-start space-x-2">
-                    {message.role === 'zeno' && (
+                    {message.role === 'assistant' && (
                       <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5">
                         Z
                       </div>
@@ -211,12 +210,12 @@ const ConversationalOnboarding = ({ onComplete, coachingService }: Conversationa
             <div className="mt-4">
               <div className="flex justify-between text-sm text-gray-600 mb-2">
                 <span>Conversation Progress</span>
-                <span>{conversation.messages.filter(m => m.role === 'zeno').length} questions</span>
+                <span>{conversation.messages.filter(m => m.role === 'assistant').length} questions</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
                   className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min((conversation.messages.filter(m => m.role === 'zeno').length / 8) * 100, 100)}%` }}
+                  style={{ width: `${Math.min((conversation.messages.filter(m => m.role === 'assistant').length / 8) * 100, 100)}%` }}
                 />
               </div>
             </div>
@@ -224,7 +223,7 @@ const ConversationalOnboarding = ({ onComplete, coachingService }: Conversationa
         </div>
 
         {/* Complete Button */}
-        {conversation.messages.filter(m => m.role === 'zeno').length >= 8 && (
+        {conversation.messages.filter(m => m.role === 'assistant').length >= 8 && (
           <div className="text-center mt-6">
             <button
               onClick={completeOnboarding}

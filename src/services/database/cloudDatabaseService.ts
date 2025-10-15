@@ -1,4 +1,4 @@
-import { DatabaseInterface, Task, Message, SyncConflict, DatabaseConfig, APIKey, ChatSession } from './types'
+import { DatabaseInterface, Task, Message, SyncConflict, DatabaseConfig, APIKey, ChatSession, Column, Reminder } from './types'
 import { getSupabaseClient } from '../supabaseClient'
 
 export class CloudDatabaseService implements DatabaseInterface {
@@ -351,6 +351,144 @@ export class CloudDatabaseService implements DatabaseInterface {
     const supabase = getSupabaseClient()
     const { error } = await supabase
       .from('api_keys')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', this.config.userId)
+
+    if (error) throw error
+  }
+
+  // Column operations
+  async getColumns(): Promise<Column[]> {
+    const supabase = getSupabaseClient()
+    const { data, error } = await supabase
+      .from('columns')
+      .select('*')
+      .eq('user_id', this.config.userId)
+      .order('position', { ascending: true })
+
+    if (error) throw error
+    return data || []
+  }
+
+  async getColumn(id: string): Promise<Column | null> {
+    const supabase = getSupabaseClient()
+    const { data, error } = await supabase
+      .from('columns')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', this.config.userId)
+      .single()
+
+    if (error) return null
+    return data
+  }
+
+  async createColumn(columnData: Omit<Column, 'id' | 'created_at' | 'updated_at'>): Promise<Column> {
+    const supabase = getSupabaseClient()
+    const { data, error } = await supabase
+      .from('columns')
+      .insert({
+        ...columnData,
+        user_id: this.config.userId
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  }
+
+  async updateColumn(id: string, updates: Partial<Column>): Promise<Column> {
+    const supabase = getSupabaseClient()
+    const { data, error } = await supabase
+      .from('columns')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .eq('user_id', this.config.userId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  }
+
+  async deleteColumn(id: string): Promise<void> {
+    const supabase = getSupabaseClient()
+    const { error } = await supabase
+      .from('columns')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', this.config.userId)
+
+    if (error) throw error
+  }
+
+  // Reminder operations
+  async getReminders(): Promise<Reminder[]> {
+    const supabase = getSupabaseClient()
+    const { data, error } = await supabase
+      .from('reminders')
+      .select('*')
+      .eq('user_id', this.config.userId)
+      .order('reminder_date', { ascending: true })
+
+    if (error) throw error
+    return data || []
+  }
+
+  async getReminder(id: string): Promise<Reminder | null> {
+    const supabase = getSupabaseClient()
+    const { data, error } = await supabase
+      .from('reminders')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', this.config.userId)
+      .single()
+
+    if (error) return null
+    return data
+  }
+
+  async createReminder(reminderData: Omit<Reminder, 'id' | 'created_at' | 'updated_at'>): Promise<Reminder> {
+    const supabase = getSupabaseClient()
+    const { data, error } = await supabase
+      .from('reminders')
+      .insert({
+        ...reminderData,
+        user_id: this.config.userId
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  }
+
+  async updateReminder(id: string, updates: Partial<Reminder>): Promise<Reminder> {
+    const supabase = getSupabaseClient()
+    const { data, error } = await supabase
+      .from('reminders')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .eq('user_id', this.config.userId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  }
+
+  async deleteReminder(id: string): Promise<void> {
+    const supabase = getSupabaseClient()
+    const { error } = await supabase
+      .from('reminders')
       .delete()
       .eq('id', id)
       .eq('user_id', this.config.userId)

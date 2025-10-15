@@ -1,5 +1,5 @@
 import { AIService } from './aiService'
-import { Task, Column, Reminder } from '../database/types'
+import { Task } from '../database/types'
 
 export interface UserProfile {
   id: string
@@ -158,14 +158,19 @@ Format as a JSON array of strings, each string being a sub-goal description.
 `
 
     try {
-      const response = await this.aiService.chatWithAI({
-        modelId: 'gemini-2.5-flash',
-        temperature: 0.7,
-        maxTokens: 1000
-      }, prompt, [], 'You are Zeno, a helpful AI coach specializing in goal setting and personal development.')
+      const response = await this.aiService.chatWithAI(
+        prompt,
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          temperature: 0.7,
+          maxTokens: 1000
+        },
+        'You are Zeno, a helpful AI coach specializing in goal setting and personal development.'
+      )
 
       // Parse the AI response to extract sub-goals
-      const subGoals = this.parseSubGoals(response.response)
+      const subGoals = this.parseSubGoals(response.content)
       return subGoals
     } catch (error) {
       console.error('Failed to decompose goal with AI:', error)
@@ -235,13 +240,18 @@ Format as JSON with this structure:
 `
 
     try {
-      const response = await this.aiService.chatWithAI({
-        modelId: 'gemini-2.5-flash',
-        temperature: 0.8,
-        maxTokens: 1500
-      }, prompt, [], 'You are Zeno, an expert daily planning AI coach.')
+      const response = await this.aiService.chatWithAI(
+        prompt,
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          temperature: 0.8,
+          maxTokens: 1500
+        },
+        'You are Zeno, an expert daily planning AI coach.'
+      )
 
-      const planData = this.parseDailyPlan(response.response)
+      const planData = this.parseDailyPlan(response.content)
       
       const dailyPlan: DailyPlan = {
         id: `plan-${Date.now()}`,
@@ -317,7 +327,7 @@ Format as JSON with this structure:
   }
 
   // Conversational AI Assistant
-  async chatWithZeno(message: string, context: any = {}): Promise<string> {
+  async chatWithZeno(message: string): Promise<string> {
     if (!this.userProfile) {
       return "Hi! I'm Zeno, your personal AI coach. Let's start by setting up your profile and goals. What would you like to focus on first?"
     }
@@ -347,13 +357,18 @@ If they're feeling stuck or unmotivated, offer gentle guidance and remind them o
 `
 
     try {
-      const response = await this.aiService.chatWithAI({
-        modelId: 'gemini-2.5-flash',
-        temperature: 0.8,
-        maxTokens: 800
-      }, message, [], contextPrompt)
+      const response = await this.aiService.chatWithAI(
+        message,
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          temperature: 0.8,
+          maxTokens: 800
+        },
+        contextPrompt
+      )
 
-      return response.response
+      return response.content
     } catch (error) {
       console.error('Failed to chat with Zeno:', error)
       return "I'm here to help you achieve your goals! What would you like to work on today?"
@@ -406,13 +421,18 @@ Format as JSON:
 `
 
     try {
-      const response = await this.aiService.chatWithAI({
-        modelId: 'gemini-2.5-flash',
-        temperature: 0.7,
-        maxTokens: 1000
-      }, prompt, [], 'You are Zeno, an expert reflection and personal development coach.')
+      const response = await this.aiService.chatWithAI(
+        prompt,
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          temperature: 0.7,
+          maxTokens: 1000
+        },
+        'You are Zeno, an expert reflection and personal development coach.'
+      )
 
-      const reflectionData = this.parseReflection(response.response)
+      const reflectionData = this.parseReflection(response.content)
       
       const reflection: Reflection = {
         id: `reflection-${Date.now()}`,
@@ -517,13 +537,18 @@ Format as JSON array:
 `
 
     try {
-      const response = await this.aiService.chatWithAI({
-        modelId: 'gemini-2.5-flash',
-        temperature: 0.6,
-        maxTokens: 1200
-      }, prompt, [], 'You are Zeno, an expert data analyst and personal development coach.')
+      const response = await this.aiService.chatWithAI(
+        prompt,
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          temperature: 0.6,
+          maxTokens: 1200
+        },
+        'You are Zeno, an expert data analyst and personal development coach.'
+      )
 
-      const insights = this.parseInsights(response.response)
+      const insights = this.parseInsights(response.content)
       return insights.map(insight => ({
         ...insight,
         id: `insight-${Date.now()}-${Math.random()}`,

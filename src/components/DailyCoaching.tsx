@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { AdvancedZenoCoachingService, UserProfile, DailyReflection, ConversationMessage } from '../services/ai/advancedZenoCoachingService'
+import { AdvancedZenoCoachingService, UserProfile, ConversationMessage } from '../services/ai/advancedZenoCoachingService'
 import { ZenoConversationalAI } from '../services/ai/zenoConversationalAI'
 import { IntelligentDailyPlanner, DailyPlan, DailyPlanConfirmation } from '../services/ai/intelligentDailyPlanner'
 import { AIService } from '../services/ai/aiService'
 import { useDatabase } from '../services/database/DatabaseContext'
 import { Task } from '../services/database/types'
-import { ConversationalResponse, GoalIntent, ClarificationQuestion } from '../services/ai/conversationalTypes'
+import { GoalIntent, ClarificationQuestion } from '../services/ai/conversationalTypes'
 
 interface ChatSession {
   id: string
@@ -152,7 +152,7 @@ const DailyCoaching = ({ coachingService, userProfile }: DailyCoachingProps) => 
       // Add Zeno's message to conversation history
       const zenoMessage: ConversationMessage = {
         id: `msg-${Date.now()}`,
-        role: 'zeno',
+        role: 'assistant',
         content: message,
         timestamp: new Date().toISOString()
       }
@@ -174,7 +174,7 @@ I'm here to help you create a balanced, productive day! 🌟`
       
       const zenoMessage: ConversationMessage = {
         id: `msg-${Date.now()}`,
-        role: 'zeno',
+        role: 'assistant',
         content: fallbackMessage,
         timestamp: new Date().toISOString()
       }
@@ -250,7 +250,7 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
 
         const zenoMessage: ConversationMessage = {
           id: `msg-${Date.now()}`,
-          role: 'zeno',
+          role: 'assistant',
           content: confirmationMessage,
           timestamp: new Date().toISOString()
         }
@@ -269,8 +269,8 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
         )
 
         // Handle extracted goals
-        if (response.extractedData?.goals.length > 0) {
-          setExtractedGoals(prev => [...prev, ...response.extractedData.goals as GoalIntent[]])
+        if (response.extractedData?.goals && response.extractedData.goals.length > 0) {
+          setExtractedGoals(prev => [...prev, ...response.extractedData!.goals as GoalIntent[]])
         }
 
         // Handle follow-up questions
@@ -289,7 +289,7 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
         // Add Zeno's response to conversation history
         const zenoMessage: ConversationMessage = {
           id: `msg-${Date.now()}`,
-          role: 'zeno',
+          role: 'assistant',
           content: response.message,
           timestamp: new Date().toISOString()
         }
@@ -310,7 +310,7 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
       
       const errorMessage: ConversationMessage = {
         id: `msg-${Date.now()}`,
-        role: 'zeno',
+        role: 'assistant',
         content: "I'm having trouble processing that right now. Could you try rephrasing your response?",
         timestamp: new Date().toISOString()
       }
@@ -380,21 +380,21 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
       setPendingQuestions(prev => prev.filter(q => q.id !== questionId))
 
       // Add follow-up questions if any
-      if (result.followUpQuestions?.length > 0) {
-        setPendingQuestions(prev => [...prev, ...result.followUpQuestions])
+      if (result.followUpQuestions && result.followUpQuestions.length > 0) {
+        setPendingQuestions(prev => [...prev, ...result.followUpQuestions!])
       }
 
       // Add response to conversation
       const responseMessage: ConversationMessage = {
         id: `msg-${Date.now()}`,
-        role: 'zeno',
+        role: 'assistant',
         content: result.response,
         timestamp: new Date().toISOString()
       }
       setConversationHistory(prev => [...prev, responseMessage])
 
       // Handle next actions
-      if (result.nextActions?.length > 0) {
+      if (result.nextActions && result.nextActions.length > 0) {
         console.log('Next actions:', result.nextActions)
       }
     } catch (error) {
@@ -421,7 +421,7 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
       
       const responseMessage: ConversationMessage = {
         id: `msg-${Date.now()}`,
-        role: 'zeno',
+        role: 'assistant',
         content: `${result.message} Created ${result.createdTasks.length} tasks. You can now view and manage them in the Task Board!`,
         timestamp: new Date().toISOString()
       }
@@ -440,35 +440,6 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
     }
   }
 
-  const handleTaskActions = async (actions: any[]) => {
-    if (!database) return
-
-    for (const action of actions) {
-      try {
-        switch (action.type) {
-          case 'complete':
-            await database.updateTask(action.taskId, { status: 'done' })
-            setCompletedTasks(prev => [...prev, action.taskId])
-            break
-          case 'skip':
-            await database.updateTask(action.taskId, { status: 'skipped' })
-            setSkippedTasks(prev => [...prev, action.taskId])
-            break
-          case 'reschedule':
-            await database.updateTask(action.taskId, { due_date: action.newDate })
-            break
-          case 'update':
-            await database.updateTask(action.taskId, action.updates)
-            break
-        }
-      } catch (error) {
-        console.error(`Failed to execute task action ${action.type}:`, error)
-      }
-    }
-    
-    // Reload tasks to reflect changes
-    await loadTasks()
-  }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -508,51 +479,6 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
   /**
    * Extract tasks from AI response message
    */
-  const extractTasksFromResponse = (message: string): any[] => {
-    const tasks: any[] = []
-    
-    // Look for task patterns like:
-    // "1. Task Name (X hours)"
-    // "Task Name: Description (X hours)"
-    // "• Task Name (X hours)"
-    
-    const taskPatterns = [
-      /(\d+\.\s*)([^(]+)\s*\(([^)]+)\)/g,  // "1. Task Name (X hours)"
-      /([^:]+):\s*([^(]+)\s*\(([^)]+)\)/g,  // "Task Name: Description (X hours)"
-      /(•\s*)([^(]+)\s*\(([^)]+)\)/g,       // "• Task Name (X hours)"
-      /(-\s*)([^(]+)\s*\(([^)]+)\)/g        // "- Task Name (X hours)"
-    ]
-    
-    for (const pattern of taskPatterns) {
-      let match
-      while ((match = pattern.exec(message)) !== null) {
-        const taskTitle = match[2]?.trim() || match[1]?.trim()
-        const timeStr = match[3]?.trim()
-        
-        if (taskTitle && timeStr) {
-          // Convert time to minutes
-          let duration = 60 // default 1 hour
-          if (timeStr.includes('hour')) {
-            const hours = parseFloat(timeStr.match(/(\d+(?:\.\d+)?)/)?.[1] || '1')
-            duration = hours * 60
-          } else if (timeStr.includes('min')) {
-            duration = parseInt(timeStr.match(/(\d+)/)?.[1] || '60')
-          }
-          
-          tasks.push({
-            title: taskTitle,
-            description: taskTitle,
-            estimatedDuration: duration,
-            priority: 2, // Medium priority by default
-            category: 'general'
-          })
-        }
-      }
-    }
-    
-    console.log('Extracted tasks from response:', tasks)
-    return tasks
-  }
 
   /**
    * Create tasks from pending task creation
@@ -585,7 +511,7 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
       // Add success message to conversation
       const successMessage: ConversationMessage = {
         id: `msg-${Date.now()}`,
-        role: 'zeno',
+        role: 'assistant',
         content: `✅ Perfect! I've created ${createdTasks.length} tasks for you. You can now manage them in the Task Board!`,
         timestamp: new Date().toISOString()
       }
@@ -603,7 +529,7 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
       
       const errorMessage: ConversationMessage = {
         id: `msg-${Date.now()}`,
-        role: 'zeno',
+        role: 'assistant',
         content: "I'm sorry, I couldn't create the tasks right now. Please try again.",
         timestamp: new Date().toISOString()
       }
@@ -628,7 +554,7 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
     // Add a fresh welcome message
     const welcomeMessage: ConversationMessage = {
       id: `msg-${Date.now()}`,
-      role: 'zeno',
+      role: 'assistant',
       content: `Hello ${userProfile.name}! I'm ready for a fresh conversation. What would you like to work on today?`,
       timestamp: new Date().toISOString()
     }
@@ -706,19 +632,6 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
       setCurrentChatId('default')
       cleanChat()
     }
-  }
-
-  /**
-   * Update current chat session title
-   */
-  const updateChatTitle = (title: string) => {
-    setChatHistory(prev => 
-      prev.map(chat => 
-        chat.id === currentChatId 
-          ? { ...chat, title, lastMessageAt: new Date().toISOString() }
-          : chat
-      )
-    )
   }
 
   return (
@@ -906,7 +819,7 @@ You completed ${Math.round((completedTasks.length / tasks.length) * 100)}% of to
                         </p>
                         
                         {/* Add Tasks Button for Zeno messages with task details */}
-                        {message.role === 'zeno' && 
+                        {message.role === 'assistant' && 
                          pendingTaskCreation && 
                          pendingTaskCreation.messageId === message.id && (
                           <div className="mt-2 pt-2 border-t border-gray-200">

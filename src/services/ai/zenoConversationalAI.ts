@@ -6,22 +6,20 @@ import {
   ConversationalResponse,
   GoalIntent,
   ConversationContext,
-  ClarificationQuestion,
-  ExtractedTask,
-  ExtractedEntity
+  ClarificationQuestion
 } from './conversationalTypes'
 
 export class ZenoConversationalAI {
   private conversationalInput: ConversationalInputService
   private questionEngine: ContextualQuestionEngine
-  private database: DatabaseInterface
-  private userId: string
+  // private database: DatabaseInterface
+  // private userId: string
 
   constructor(aiService: AIService, database: DatabaseInterface, userId: string) {
     this.conversationalInput = new ConversationalInputService(aiService, database, userId)
     this.questionEngine = new ContextualQuestionEngine(aiService, database, userId)
-    this.database = database
-    this.userId = userId
+    // this.database = database
+    // this.userId = userId
   }
 
   /**
@@ -285,7 +283,7 @@ Respond with JSON:
   private async storeConversationContext(
     userMessage: string,
     response: ConversationalResponse,
-    conversationHistory: ConversationContext[]
+    _conversationHistory: ConversationContext[]
   ): Promise<void> {
     try {
       // Store user message
@@ -315,7 +313,7 @@ Respond with JSON:
   /**
    * Create fallback response when processing fails - SHORT AND DIRECT
    */
-  private createFallbackResponse(userMessage: string): ConversationalResponse {
+  private createFallbackResponse(_userMessage: string): ConversationalResponse {
     return {
       message: "Great! What's your main focus?",
       extractedData: {

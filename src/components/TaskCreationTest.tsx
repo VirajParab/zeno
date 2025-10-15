@@ -44,7 +44,7 @@ ${result.createdTasks.map(task => `- ${task.title} (${task.priority === 1 ? 'Hig
 
     } catch (error) {
       console.error('Test error:', error)
-      setResult(`❌ Error: ${error.message}`)
+      setResult(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsTesting(false)
     }

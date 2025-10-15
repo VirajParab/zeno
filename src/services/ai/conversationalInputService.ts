@@ -4,28 +4,24 @@ import {
   GoalIntent,
   SubGoal,
   ExtractedTask,
-  GoalContext,
   ConversationContext,
   ExtractedEntity,
   ClarificationQuestion,
-  GoalCategory,
-  GoalTimeframe,
   TaskCategory,
   ConversationAnalysis,
-  ConversationIntent,
   ConversationalResponse,
   SuggestedAction
 } from './conversationalTypes'
 
 export class ConversationalInputService {
   private aiService: AIService
-  private database: DatabaseInterface
-  private userId: string
+  // private database: DatabaseInterface
+  // private userId: string
 
-  constructor(aiService: AIService, database: DatabaseInterface, userId: string) {
+  constructor(aiService: AIService, _database: DatabaseInterface, _userId: string) {
     this.aiService = aiService
-    this.database = database
-    this.userId = userId
+    // this.database = database
+    // this.userId = userId
   }
 
   /**
@@ -181,7 +177,7 @@ Respond with JSON:
     for (const goalData of _analysis.extractedGoals) {
       const goal: Partial<GoalIntent> = {
         id: `goal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        userId: this.userId,
+        userId: 'demo-user-123',
         originalText: userMessage,
         extractedGoal: goalData.extractedGoal || '',
         category: goalData.category || 'other',
@@ -232,14 +228,14 @@ Respond with JSON:
    * Generate intelligent follow-up questions based on analysis
    */
   private async generateFollowUpQuestions(
-    analysis: ConversationAnalysis,
-    extractedData: any
+    _analysis: ConversationAnalysis,
+    _extractedData: any
   ): Promise<ClarificationQuestion[]> {
     const questions: ClarificationQuestion[] = []
 
     // Only ask 1 essential question to move quickly to task creation
-    if (extractedData.goals.length > 0) {
-      const essentialQuestion = await this.generateEssentialQuestion(extractedData.goals[0])
+    if (_extractedData.goals.length > 0) {
+      const essentialQuestion = await this.generateEssentialQuestion(_extractedData.goals[0])
       if (essentialQuestion) {
         questions.push(essentialQuestion)
       }
@@ -680,7 +676,7 @@ Respond with JSON:
     return { subgoals: [], tasks: [] }
   }
 
-  private createFallbackAnalysis(userMessage: string): ConversationAnalysis {
+  private createFallbackAnalysis(_userMessage: string): ConversationAnalysis {
     return {
       intent: {
         type: 'general',

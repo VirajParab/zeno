@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { DatabaseProvider } from './services/database/DatabaseContext'
+import { DatabaseProvider, useDatabase } from './services/database/DatabaseContext'
 import { AIModelConfig } from './services/ai/types'
 import { AIService } from './services/ai/aiService'
 import { AdvancedZenoCoachingService, UserProfile } from './services/ai/advancedZenoCoachingService'
@@ -15,7 +15,8 @@ import ConversationalOnboarding from './components/ConversationalOnboarding'
 
 type ActiveTab = 'dashboard' | 'chat' | 'tasks' | 'habits' | 'settings'
 
-function App() {
+function AppContent() {
+  const { database } = useDatabase()
   const userId = 'demo-user-123'
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard')
   const [selectedModelConfig, setSelectedModelConfig] = useState<AIModelConfig>({
@@ -24,7 +25,7 @@ function App() {
     temperature: 0.7,
     maxTokens: 400
   })
-  const [aiService] = useState(() => new AIService())
+  const [aiService] = useState(() => new AIService(database, userId))
   const [coachingService] = useState(() => new AdvancedZenoCoachingService(aiService))
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [isOnboarding, setIsOnboarding] = useState(false)
@@ -83,16 +84,24 @@ function App() {
   }
 
   return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {!isOnboarding && (
+        <Navigation activeTab={activeTab} onTabChange={setActiveTab} userProfile={userProfile} />
+      )}
+      
+      <main className={isOnboarding ? '' : 'pt-16'}>
+        {renderContent()}
+      </main>
+    </div>
+  )
+}
+
+function App() {
+  const userId = 'demo-user-123'
+  
+  return (
     <DatabaseProvider userId={userId}>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        {!isOnboarding && (
-          <Navigation activeTab={activeTab} onTabChange={setActiveTab} userProfile={userProfile} />
-        )}
-        
-        <main className={isOnboarding ? '' : 'pt-16'}>
-          {renderContent()}
-        </main>
-      </div>
+      <AppContent />
     </DatabaseProvider>
   )
 }

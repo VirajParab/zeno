@@ -10,7 +10,7 @@ interface NavigationProps {
   userProfile?: UserProfile | null
 }
 
-const Navigation = ({ activeTab, onTabChange, userProfile }: NavigationProps) => {
+const Navigation = ({ activeTab, onTabChange }: NavigationProps) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   const tabs = [
