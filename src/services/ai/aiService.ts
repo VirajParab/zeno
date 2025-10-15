@@ -16,7 +16,8 @@ export class AIService {
     text: string, 
     modelConfig: AIModelConfig,
     systemPrompt?: string,
-    chatSessionId?: string
+    chatSessionId?: string,
+    originalUserMessage?: string // Optional parameter for the original user message
   ): Promise<ChatMessage> {
     const apiKey = await this.database.getActiveAPIKey(modelConfig.provider)
     if (!apiKey) {
@@ -74,7 +75,7 @@ export class AIService {
       await this.database.createMessage({
         user_id: this.userId,
         role: 'user',
-        content: text,
+        content: originalUserMessage || text, // Use original user message if provided, otherwise use the text
         model: modelConfig.modelId,
         provider: modelConfig.provider,
         tokens: 0, // We don't count input tokens for simplicity
@@ -105,6 +106,79 @@ export class AIService {
     } catch (error) {
       console.error('Error in chatWithAI:', error)
       throw new Error(`Failed to get AI response: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  async chatWithAIWithoutStorage(
+    text: string, 
+    modelConfig: AIModelConfig,
+    systemPrompt?: string
+  ): Promise<ChatMessage> {
+    const apiKey = await this.database.getActiveAPIKey(modelConfig.provider)
+    if (!apiKey) {
+      throw new Error(`No active API key found for provider: ${modelConfig.provider}`)
+    }
+
+    // Get recent messages for context (but don't store this interaction)
+    const recentMessages = await this.database.getMessages()
+    const lastMessages = recentMessages
+      .filter(msg => msg.chat_session_id === undefined || msg.chat_session_id === 'default')
+      .slice(-10) // Last 10 messages for context
+      .map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }))
+
+    let response: string
+    let tokens: number = 0
+    let cost: number = 0
+
+    try {
+      if (modelConfig.provider === 'openai') {
+        const result = await this.chatWithOpenAI(
+          apiKey.key,
+          modelConfig,
+          text,
+          lastMessages,
+          systemPrompt
+        )
+        response = result.response
+        tokens = result.tokens
+        cost = result.cost
+      } else if (modelConfig.provider === 'gemini') {
+        const result = await this.chatWithGemini(
+          apiKey.key,
+          modelConfig,
+          text,
+          lastMessages,
+          systemPrompt
+        )
+        response = result.response
+        tokens = result.tokens
+        cost = result.cost
+      } else {
+        throw new Error(`Unsupported provider: ${modelConfig.provider}`)
+      }
+
+      // Update API key usage
+      await this.database.updateAPIKey(apiKey.id, {
+        usage_count: apiKey.usage_count + 1,
+        last_used_at: new Date().toISOString()
+      })
+
+      // Return response WITHOUT storing messages
+      return {
+        role: 'assistant',
+        content: response,
+        timestamp: new Date().toISOString(),
+        model: modelConfig.modelId,
+        provider: modelConfig.provider,
+        tokens,
+        cost
+      }
+    } catch (error) {
+      console.error('Error in chatWithAIWithoutStorage:', error)
+      throw error
     }
   }
 

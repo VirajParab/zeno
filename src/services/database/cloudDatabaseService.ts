@@ -114,7 +114,9 @@ export class CloudDatabaseService implements DatabaseInterface {
 
   async getMessagesByChatSession(chatSessionId: string): Promise<Message[]> {
     const supabase = getSupabaseClient()
-    const { data, error } = await supabase
+    
+    // Try both string and number versions to handle data type inconsistencies
+    const { data: dataString, error: errorString } = await supabase
       .from('messages')
       .select('*')
       .eq('user_id', this.config.userId)
@@ -122,8 +124,25 @@ export class CloudDatabaseService implements DatabaseInterface {
       .order('inserted_at', { ascending: true })
       .limit(100)
 
-    if (error) throw error
-    return data || []
+    const { data: dataNumber, error: errorNumber } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('user_id', this.config.userId)
+      .eq('chat_session_id', parseInt(chatSessionId))
+      .order('inserted_at', { ascending: true })
+      .limit(100)
+
+    if (errorString && errorNumber) {
+      throw errorString
+    }
+
+    // Combine results and remove duplicates
+    const allData = [...(dataString || []), ...(dataNumber || [])]
+    const uniqueData = allData.filter((msg, index, self) => 
+      index === self.findIndex(m => m.id === msg.id)
+    )
+
+    return uniqueData
   }
 
   async getMessage(id: string): Promise<Message | null> {

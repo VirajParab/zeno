@@ -112,7 +112,13 @@ export class LocalDatabaseService implements DatabaseInterface {
       .toArray()
     
     return allMessages
-      .filter(msg => msg.chat_session_id === chatSessionId)
+      .filter(msg => {
+        // Handle both string and number chat_session_id values
+        const msgSessionId = msg.chat_session_id
+        return msgSessionId === chatSessionId || 
+               msgSessionId === chatSessionId.toString() || 
+               msgSessionId?.toString() === chatSessionId
+      })
       .sort((a, b) => new Date(a.inserted_at).getTime() - new Date(b.inserted_at).getTime())
   }
 

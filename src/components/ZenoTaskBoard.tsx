@@ -305,11 +305,16 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
       const task = tasks.find(t => t.id === draggableId)
       if (!task) return
       
-      const newColumnId = destination.droppableId
+      const newColumnId = destination.droppableId === 'unassigned' ? null : destination.droppableId
       const newPosition = destination.index
       
       // Get all tasks in the destination column
-      const tasksInDestinationColumn = tasks.filter(t => t.column_id === newColumnId && t.id !== draggableId)
+      const tasksInDestinationColumn = tasks.filter(t => {
+        if (destination.droppableId === 'unassigned') {
+          return (!t.column_id || t.column_id === 'default') && t.id !== draggableId
+        }
+        return t.column_id === newColumnId && t.id !== draggableId
+      })
       
       // Update the dragged task
       await database.updateTask(task.id, {
@@ -417,6 +422,11 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
   }
 
   const getTasksByColumn = (columnId: string) => {
+    if (columnId === 'unassigned') {
+      return tasks
+        .filter(task => !task.column_id || task.column_id === 'default')
+        .sort((a, b) => a.position - b.position)
+    }
     return tasks
       .filter(task => task.column_id === columnId)
       .sort((a, b) => a.position - b.position)
@@ -805,6 +815,89 @@ const ZenoTaskBoard = ({ coachingService, userProfile }: ZenoTaskBoardProps) => 
         {/* Board */}
         <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {/* Unassigned Tasks Column */}
+            {getTasksByColumn('unassigned').length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
+                <div className="p-6 rounded-t-xl bg-yellow-100">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-gray-900 text-lg">Unassigned Tasks</h3>
+                      <span className="text-gray-600 text-sm">
+                        {getTasksByColumn('unassigned').length} tasks
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                <Droppable droppableId="unassigned">
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={`p-4 min-h-[200px] transition-colors duration-200 ${
+                        snapshot.isDraggingOver ? 'bg-yellow-50' : 'bg-gray-50'
+                      }`}
+                    >
+                      {getTasksByColumn('unassigned').map((task, index) => (
+                        <Draggable key={task.id} draggableId={task.id} index={index}>
+                          {(provided, snapshot) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              className={`bg-white border border-gray-200 rounded-lg p-4 mb-3 shadow-sm transition-all duration-200 ${
+                                snapshot.isDragging ? 'shadow-lg rotate-2' : 'hover:shadow-md'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-gray-900 text-sm mb-1">{task.title}</h4>
+                                  {task.description && (
+                                    <p className="text-gray-600 text-xs mb-2">{task.description}</p>
+                                  )}
+                                  <div className="flex items-center space-x-2">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium text-white ${getPriorityColor(task.priority)}`}>
+                                      {getPriorityLabel(task.priority)}
+                                    </span>
+                                    {task.due_date && (
+                                      <span className={`text-xs px-2 py-1 rounded-full ${
+                                        isOverdue(task.due_date) ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+                                      }`}>
+                                        {new Date(task.due_date).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex space-x-1 ml-2">
+                                  <button
+                                    onClick={() => openEditTask(task)}
+                                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={() => deleteTask(task.id)}
+                                    className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </div>
+            )}
+            
             {columns.map((column) => (
               <div 
                 key={column.id} 

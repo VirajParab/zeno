@@ -21,7 +21,11 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
   const [showModelSelector, setShowModelSelector] = useState(false)
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [chatHistory, setChatHistory] = useState<ChatSession[]>([])
-  const [currentChatId, setCurrentChatId] = useState<string>('default')
+  const [currentChatId, setCurrentChatId] = useState<string>(() => {
+    // Try to restore from localStorage
+    const savedChatId = localStorage.getItem('zeno-current-chat-id')
+    return savedChatId || 'all-messages'
+  })
   const [showChatSidebar, setShowChatSidebar] = useState(true)
   const [tasks, setTasks] = useState<Task[]>([])
   const [pendingTaskCreation, setPendingTaskCreation] = useState<{
@@ -29,6 +33,8 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     tasks: any[]
   } | null>(null)
   const [tasksCreated, setTasksCreated] = useState(false)
+  const [editingChatId, setEditingChatId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -38,11 +44,15 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     loadAPIKeys()
     // Don't initialize sample chats - start fresh
     loadTasks()
-  }, [])
+  }, [database])
 
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
 
   const loadAPIKeys = async () => {
     if (!database) return
@@ -149,8 +159,120 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     }
   }
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  const cleanMessageContent = (content: string, role: string): string => {
+    // This function is now only needed for existing messages that were stored with prompts
+    // New messages will be stored cleanly
+    console.log('Cleaning message:', role, content.substring(0, 100) + '...')
+    
+    if (role === 'assistant') {
+      // Try to extract clean response from AI messages that contain JSON
+      try {
+        // Look for JSON in the content
+        const jsonMatch = content.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0])
+          if (parsed.user_message_response) {
+            console.log('Found clean response in JSON:', parsed.user_message_response)
+            return parsed.user_message_response
+          }
+        }
+        
+        // If no JSON found, try to extract the clean response after "user_message_response":
+        const responseMatch = content.match(/user_message_response["\s]*:["\s]*"([^"]+)"/)
+        if (responseMatch) {
+          console.log('Found clean response via regex:', responseMatch[1])
+          return responseMatch[1]
+        }
+        
+        // If still no clean response found, return the original content
+        console.log('No clean response found, returning original content')
+        return content
+      } catch (error) {
+        console.log('Error cleaning message content:', error)
+        return content
+      }
+    } else if (role === 'user') {
+      // Clean user messages that contain system prompts
+      try {
+        // Check if the message contains system prompt indicators
+        if (content.includes('You are Zeno, an AI assistant') || content.includes('User Message:')) {
+          console.log('Detected user message with system prompt, extracting original message')
+          
+          // Try to extract the original user message after "User Message:"
+          const userMessageMatch = content.match(/User Message:\s*"([^"]+)"/)
+          if (userMessageMatch) {
+            console.log('Found original user message:', userMessageMatch[1])
+            return userMessageMatch[1]
+          }
+          
+          // If that doesn't work, try to find text that looks like a user message
+          // Look for text that doesn't contain system instructions
+          const lines = content.split('\n')
+          for (const line of lines) {
+            const trimmedLine = line.trim()
+            if (trimmedLine && 
+                !trimmedLine.includes('You are Zeno') && 
+                !trimmedLine.includes('Your role is to:') &&
+                !trimmedLine.includes('Respond with this EXACT JSON') &&
+                !trimmedLine.includes('Guidelines:') &&
+                !trimmedLine.includes('estimatedDuration:') &&
+                !trimmedLine.includes('priority:') &&
+                !trimmedLine.includes('category:') &&
+                !trimmedLine.includes('RESPOND WITH ONLY')) {
+              console.log('Found clean user message line:', trimmedLine)
+              return trimmedLine
+            }
+          }
+        }
+        
+        // If no system prompt detected, return original content
+        return content
+      } catch (error) {
+        console.log('Error cleaning user message:', error)
+        return content
+      }
+    }
+    
+    // For other roles or if cleaning fails, return original content
+    return content
+  }
+
+  const debugAllMessages = async () => {
+    if (!database) return
+    
+    try {
+      console.log('=== DEBUGGING ALL MESSAGES ===')
+      const allMessages = await database.getMessages()
+      console.log(`Total messages in database: ${allMessages.length}`)
+      
+      allMessages.forEach((msg, index) => {
+        console.log(`Message ${index + 1}:`, {
+          id: msg.id,
+          role: msg.role,
+          content: msg.content.substring(0, 50) + '...',
+          chat_session_id: msg.chat_session_id,
+          inserted_at: msg.inserted_at
+        })
+      })
+      
+      // Group by chat_session_id
+      const messagesBySession = allMessages.reduce((acc, msg) => {
+        const sessionId = msg.chat_session_id || 'no-session'
+        if (!acc[sessionId]) acc[sessionId] = []
+        acc[sessionId].push(msg)
+        return acc
+      }, {} as Record<string, any[]>)
+      
+      console.log('Messages grouped by chat_session_id:', messagesBySession)
+      
+      // Show unique chat_session_ids
+      const uniqueSessionIds = [...new Set(allMessages.map(msg => msg.chat_session_id || 'no-session'))]
+      console.log('Unique chat_session_ids in database:', uniqueSessionIds)
+      
+      console.log('=== END DEBUG ===')
+    } catch (error) {
+      console.error('Error debugging messages:', error)
+    }
   }
 
   const loadChatSessions = async () => {
@@ -163,7 +285,60 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       console.log('Loading chat sessions...')
       const sessions = await database.getChatSessions()
       console.log('Loaded chat sessions:', sessions)
-      setChatHistory(sessions)
+      
+      // Debug all messages to see what's in the database
+      await debugAllMessages()
+      
+      // Fix message counts for all sessions by counting actual messages
+      const updatedSessions = []
+      for (const session of sessions) {
+        try {
+          console.log(`Checking session: ${session.title} (ID: ${session.id})`)
+          const actualMessages = await database.getMessagesByChatSession(session.id)
+          console.log(`Found ${actualMessages.length} messages for session ${session.id}`)
+          
+          if (actualMessages.length !== session.message_count) {
+            console.log(`Fixing message count for ${session.title}: ${session.message_count} -> ${actualMessages.length}`)
+            await database.updateChatSession(session.id, {
+              message_count: actualMessages.length
+            })
+            updatedSessions.push({ ...session, message_count: actualMessages.length })
+          } else {
+            console.log(`Message count correct for ${session.title}: ${session.message_count}`)
+            updatedSessions.push(session)
+          }
+        } catch (error) {
+          console.error(`Error fixing message count for session ${session.id}:`, error)
+          updatedSessions.push(session)
+        }
+      }
+      
+      setChatHistory(updatedSessions)
+      
+      // Restore the saved chat session or auto-load the most recent one
+      const savedChatId = localStorage.getItem('zeno-current-chat-id')
+      if (savedChatId && savedChatId !== 'all-messages') {
+        // Check if the saved chat session still exists
+        const savedSession = sessions.find(s => s.id === savedChatId)
+        if (savedSession) {
+          console.log('Restoring saved chat session:', savedSession.title)
+          await loadChatSession(savedChatId)
+        } else {
+          console.log('Saved chat session not found, loading most recent')
+          if (sessions.length > 0) {
+            await loadChatSession(sessions[0].id)
+          }
+        }
+      } else if (sessions.length > 0 && messages.length === 0) {
+        // Auto-load most recent session if no saved session
+        const mostRecentSession = sessions[0]
+        console.log('Auto-loading most recent session:', mostRecentSession.title)
+        await loadChatSession(mostRecentSession.id)
+      } else if (sessions.length === 0) {
+        console.log('No chat sessions found, staying in all-messages mode')
+      } else {
+        console.log('Preserving current chat session:', currentChatId)
+      }
     } catch (error) {
       console.error('Failed to load chat sessions:', error)
     }
@@ -184,16 +359,16 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     setInputMessage('')
     setIsLoading(true)
 
-    // Update chat title if this is the first user message
-    if (messages.length === 0) {
-      const title = generateDailyChatTitle()
+    // Update chat title if this is the first user message or if we're in "all-messages" mode
+    if (messages.length === 0 || currentChatId === 'all-messages') {
+      const title = generateChatTitle()
       // Create a new chat session for the first message
       const newChatId = `chat-${Date.now()}`
       const newSession: Omit<ChatSession, 'id' | 'created_at' | 'updated_at'> = {
         user_id: 'demo-user-123',
         title: title,
         last_message_at: new Date().toISOString(),
-        message_count: 1
+        message_count: 0
       }
       
       try {
@@ -210,11 +385,29 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           last_message_at: new Date().toISOString(),
-          message_count: 1
+          message_count: 0
         }
         setChatHistory(prev => [fallbackSession, ...prev])
         setCurrentChatId(newChatId)
       }
+    }
+
+    // Store user message in database
+    try {
+      console.log(`Storing user message with chat_session_id: ${currentChatId}`)
+      await database.createMessage({
+        user_id: 'demo-user-123',
+        role: 'user',
+        content: inputMessage,
+        chat_session_id: currentChatId.toString(), // Ensure string type
+        model: selectedModel,
+        provider: selectedProvider,
+        tokens: 0,
+        cost: 0
+      })
+      console.log('User message stored successfully')
+    } catch (error) {
+      console.error('Failed to store user message:', error)
     }
 
     try {
@@ -230,6 +423,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       const displayMessage = conversationalResponse.message
       
       console.log('Conversational response:', conversationalResponse)
+      console.log('Display message:', displayMessage)
       console.log('Can create task:', canCreateTask)
       
       const assistantMessage = {
@@ -246,12 +440,32 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
 
       setMessages(prev => [...prev, assistantMessage])
       
-      // Update chat message count
+      // Store assistant message in database
       try {
+        await database.createMessage({
+          user_id: 'demo-user-123',
+          role: 'assistant',
+          content: displayMessage,
+          chat_session_id: currentChatId.toString(),
+          model: 'gemini-2.5-flash',
+          provider: selectedProvider,
+          tokens: 0,
+          cost: 0
+        })
+      } catch (error) {
+        console.error('Failed to store assistant message:', error)
+      }
+      
+      // Update chat message count by counting actual messages
+      try {
+        console.log(`Updating message count for chat session: ${currentChatId}`)
+        const actualMessages = await database.getMessagesByChatSession(currentChatId)
+        console.log(`Found ${actualMessages.length} messages for session ${currentChatId}`)
         await database.updateChatSession(currentChatId, {
           last_message_at: new Date().toISOString(),
-          message_count: (chatHistory.find(chat => chat.id === currentChatId)?.message_count || 0) + 1
+          message_count: actualMessages.length
         })
+        console.log(`Updated message count to ${actualMessages.length}`)
         // Reload chat sessions to get updated data
         await loadChatSessions()
       } catch (error) {
@@ -260,18 +474,22 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
         setChatHistory(prev => 
           prev.map(chat => 
             chat.id === currentChatId 
-              ? { ...chat, last_message_at: new Date().toISOString(), message_count: chat.message_count + 1 }
+              ? { ...chat, last_message_at: new Date().toISOString(), message_count: chat.message_count + 2 }
               : chat
           )
         )
       }
       
       // If AI provided tasks and can create task, set up pending task creation
+      console.log('Checking task creation conditions:', { aiTasksLength: aiTasks.length, canCreateTask, aiTasks, structuredTaskDetails })
       if (aiTasks.length > 0 && canCreateTask) {
+        console.log('Setting pending task creation with messageId:', assistantMessage.id)
         setPendingTaskCreation({
           messageId: assistantMessage.id,
           tasks: aiTasks
         })
+      } else {
+        console.log('Not setting pending task creation:', { aiTasksLength: aiTasks.length, canCreateTask })
       }
     } catch (error) {
       console.error('Failed to send message:', error)
@@ -283,11 +501,28 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       }
       setMessages(prev => [...prev, errorMessage])
       
+      // Store error message in database
+      try {
+        await database.createMessage({
+          user_id: 'demo-user-123',
+          role: 'assistant',
+          content: 'Sorry, I encountered an error. Please check your API key configuration.',
+          chat_session_id: currentChatId.toString(),
+          model: selectedModel,
+          provider: selectedProvider,
+          tokens: 0,
+          cost: 0
+        })
+      } catch (error) {
+        console.error('Failed to store error message:', error)
+      }
+      
       // Update chat message count for error message too
       try {
+        const actualMessages = await database.getMessagesByChatSession(currentChatId)
         await database.updateChatSession(currentChatId, {
           last_message_at: new Date().toISOString(),
-          message_count: (chatHistory.find(chat => chat.id === currentChatId)?.message_count || 0) + 1
+          message_count: actualMessages.length
         })
         // Reload chat sessions to get updated data
         await loadChatSessions()
@@ -297,7 +532,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
         setChatHistory(prev => 
           prev.map(chat => 
             chat.id === currentChatId 
-              ? { ...chat, last_message_at: new Date().toISOString(), message_count: chat.message_count + 1 }
+              ? { ...chat, last_message_at: new Date().toISOString(), message_count: chat.message_count + 2 }
               : chat
           )
         )
@@ -315,18 +550,24 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
   }
 
 
-  const generateDailyChatTitle = (): string => {
-    const today = new Date()
-    const dayName = today.toLocaleDateString('en-US', { weekday: 'long' })
-    const monthName = today.toLocaleDateString('en-US', { month: 'long' })
-    const day = today.getDate()
+  const generateChatTitle = (): string => {
+    const now = new Date()
+    const timeStr = now.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true 
+    })
+    const dateStr = now.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric' 
+    })
     
-    return `${dayName}, ${monthName} ${day}`
+    return `Chat ${dateStr} ${timeStr}`
   }
 
 
   const createNewChat = async () => {
-    const title = generateDailyChatTitle()
+    const title = generateChatTitle()
     const newSession: Omit<ChatSession, 'id' | 'created_at' | 'updated_at'> = {
       user_id: 'demo-user-123',
       title: title,
@@ -363,7 +604,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       setChatHistory(prev => prev.filter(chat => chat.id !== chatId))
       
       if (chatId === currentChatId) {
-        setCurrentChatId('default')
+        setCurrentChatId('all-messages')
         setMessages([])
       }
     } catch (error) {
@@ -372,25 +613,67 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       setChatHistory(prev => prev.filter(chat => chat.id !== chatId))
       
       if (chatId === currentChatId) {
-        setCurrentChatId('default')
+        setCurrentChatId('all-messages')
         setMessages([])
       }
     }
   }
 
+  const startEditingChat = (chatId: string, currentTitle: string) => {
+    setEditingChatId(chatId)
+    setEditingTitle(currentTitle)
+  }
+
+  const cancelEditingChat = () => {
+    setEditingChatId(null)
+    setEditingTitle('')
+  }
+
+  const saveChatTitle = async (chatId: string) => {
+    if (!editingTitle.trim()) {
+      cancelEditingChat()
+      return
+    }
+
+    try {
+      await database.updateChatSession(chatId, { title: editingTitle.trim() })
+      setChatHistory(prev => 
+        prev.map(chat => 
+          chat.id === chatId 
+            ? { ...chat, title: editingTitle.trim() }
+            : chat
+        )
+      )
+      cancelEditingChat()
+    } catch (error) {
+      console.error('Failed to update chat title:', error)
+      cancelEditingChat()
+    }
+  }
+
   const loadChatSession = async (chatId: string) => {
+    console.log('Loading chat session:', chatId)
     setCurrentChatId(chatId)
+    // Save to localStorage to persist across tab switches
+    localStorage.setItem('zeno-current-chat-id', chatId)
     
     try {
-      // Load messages for this specific chat session
-      const chatMessages = await database.getMessagesByChatSession(chatId)
-      console.log('Loaded messages for chat session:', chatMessages)
+      let chatMessages
+      if (chatId === 'all-messages') {
+        // Load all messages when "All Messages" is selected
+        chatMessages = await database.getMessages()
+        console.log('Loaded all messages:', chatMessages.length)
+      } else {
+        // Load messages for this specific chat session
+        chatMessages = await database.getMessagesByChatSession(chatId)
+        console.log('Loaded messages for chat session:', chatId, chatMessages.length)
+      }
       
       // Transform database messages to the format expected by the UI
       const uiMessages = chatMessages.map(msg => ({
         id: msg.id,
         role: msg.role,
-        content: msg.content,
+        content: cleanMessageContent(msg.content, msg.role), // Clean the content
         timestamp: msg.inserted_at,
         model: msg.model,
         tokens: msg.tokens,
@@ -398,6 +681,8 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       }))
       
       setMessages(uiMessages)
+      console.log('Set messages:', uiMessages.length)
+      console.log('Messages content:', uiMessages)
     } catch (error) {
       console.error('Failed to load chat session messages:', error)
       setMessages([])
@@ -462,6 +747,26 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
     try {
       const createdTasks: Task[] = []
       
+      // Get the first available column (Focus Tasks) or create a default one
+      let defaultColumnId = 'default'
+      try {
+        const columns = await database.getColumns()
+        if (columns.length > 0) {
+          defaultColumnId = columns[0].id // Use the first column (Focus Tasks)
+        } else {
+          // Create a default column if none exist
+          const defaultColumn = await database.createColumn({
+            user_id: 'demo-user-123',
+            title: 'Focus Tasks',
+            color: 'bg-blue-100',
+            position: 0
+          })
+          defaultColumnId = defaultColumn.id
+        }
+      } catch (error) {
+        console.error('Error getting columns:', error)
+      }
+      
       for (const taskData of pendingTaskCreation.tasks) {
         console.log('Processing task data:', taskData)
         try {
@@ -472,7 +777,7 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
             status: 'todo',
             priority: taskData.priority,
             due_date: new Date().toISOString(),
-            column_id: 'default',
+            column_id: defaultColumnId,
             position: 0
           })
           console.log('Created task:', task)
@@ -491,6 +796,30 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
       }
       setMessages(prev => [...prev, successMessage])
 
+      // Store success message in database
+      try {
+        await database.createMessage({
+          user_id: 'demo-user-123',
+          role: 'assistant',
+          content: `✅ Perfect! I've created ${createdTasks.length} tasks for you. You can now manage them in the Task Board!`,
+          chat_session_id: currentChatId.toString(),
+          model: 'gemini-2.5-flash',
+          provider: selectedProvider,
+          tokens: 0,
+          cost: 0
+        })
+        
+        // Update chat message count
+        const actualMessages = await database.getMessagesByChatSession(currentChatId)
+        await database.updateChatSession(currentChatId, {
+          last_message_at: new Date().toISOString(),
+          message_count: actualMessages.length
+        })
+        await loadChatSessions()
+      } catch (error) {
+        console.error('Failed to store success message:', error)
+      }
+
       await loadTasks()
       
       setPendingTaskCreation(null)
@@ -506,6 +835,30 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
         timestamp: new Date().toISOString()
       }
       setMessages(prev => [...prev, errorMessage])
+
+      // Store error message in database
+      try {
+        await database.createMessage({
+          user_id: 'demo-user-123',
+          role: 'assistant',
+          content: "I'm sorry, I couldn't create the tasks right now. Please try again.",
+          chat_session_id: currentChatId.toString(),
+          model: 'gemini-2.5-flash',
+          provider: selectedProvider,
+          tokens: 0,
+          cost: 0
+        })
+        
+        // Update chat message count
+        const actualMessages = await database.getMessagesByChatSession(currentChatId)
+        await database.updateChatSession(currentChatId, {
+          last_message_at: new Date().toISOString(),
+          message_count: actualMessages.length
+        })
+        await loadChatSessions()
+      } catch (error) {
+        console.error('Failed to store task creation error message:', error)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -554,6 +907,39 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
             </button>
             
             <div className="space-y-2">
+              {/* All Messages Option */}
+              <div
+                className={`group p-3 rounded-lg transition-colors ${
+                  currentChatId === 'all-messages'
+                    ? 'bg-blue-100 border border-blue-300'
+                    : 'bg-gray-50 hover:bg-gray-100'
+                }`}
+              >
+                <div 
+                  onClick={() => loadChatSession('all-messages')}
+                  className="cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-medium text-gray-900 text-sm truncate">
+                      📋 {new Date().toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </h3>
+                    <span className="text-xs text-gray-500">
+                      All conversations
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    View all AI messages
+                  </p>
+                </div>
+              </div>
+              
               {chatHistory.map((chat) => (
                 <div
                   key={chat.id}
@@ -563,34 +949,80 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
                       : 'bg-gray-50 hover:bg-gray-100'
                   }`}
                 >
-                  <div 
-                    onClick={() => loadChatSession(chat.id)}
-                    className="cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-medium text-gray-900 text-sm truncate">
-                        {chat.title}
-                      </h3>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs text-gray-500">
-                          {chat.message_count} msgs
-                        </span>
+                  {editingChatId === chat.id ? (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            saveChatTitle(chat.id)
+                          } else if (e.key === 'Escape') {
+                            cancelEditingChat()
+                          }
+                        }}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoFocus
+                      />
+                      <div className="flex space-x-2">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            deleteChatSession(chat.id)
-                          }}
-                          className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 transition-opacity"
-                          title="Delete chat"
+                          onClick={() => saveChatTitle(chat.id)}
+                          className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
                         >
-                          🗑️
+                          Save
+                        </button>
+                        <button
+                          onClick={cancelEditingChat}
+                          className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600"
+                        >
+                          Cancel
                         </button>
                       </div>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {new Date(chat.last_message_at).toLocaleDateString()}
-                    </p>
-                  </div>
+                  ) : (
+                    <div 
+                      onClick={() => {
+                        console.log('Clicked on chat session:', chat.id, chat.title)
+                        loadChatSession(chat.id)
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-medium text-gray-900 text-sm truncate">
+                          {chat.title}
+                        </h3>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs text-gray-500">
+                            {chat.message_count} msgs
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              startEditingChat(chat.id, chat.title)
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-blue-500 hover:text-blue-700 transition-opacity"
+                            title="Rename chat"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              deleteChatSession(chat.id)
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 transition-opacity"
+                            title="Delete chat"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {new Date(chat.last_message_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  )}
                 </div>
               ))}
               
@@ -620,11 +1052,26 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
               AI
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-gray-900">
-                AI Assistant
-              </h1>
+              <div className="flex items-center justify-between">
+                <h1 className="text-lg font-semibold text-gray-900">
+                  {currentChatId === 'all-messages' 
+                    ? 'All AI Conversations' 
+                    : chatHistory.find(chat => chat.id === currentChatId)?.title || 'AI Assistant'
+                  }
+                </h1>
+                <button 
+                  onClick={debugAllMessages}
+                  className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600"
+                  title="Debug messages"
+                >
+                  🐛
+                </button>
+              </div>
               <p className="text-sm text-gray-500">
-                {selectedModel} • {selectedProvider}
+                {currentChatId === 'all-messages' 
+                  ? `${messages.length} total messages` 
+                  : `${selectedModel} • ${selectedProvider}`
+                }
               </p>
             </div>
           </div>
@@ -833,19 +1280,29 @@ const ChatInterface = ({}: ChatInterfaceProps) => {
               )}
               
               {/* Add Tasks Button for AI messages with task details */}
-              {message.role === 'assistant' && 
-               pendingTaskCreation && 
-               pendingTaskCreation.messageId === message.id && (
-                <div className="mt-2 pt-2 border-t border-gray-200">
-                  <button
-                    onClick={createTasksFromPending}
-                    disabled={isLoading}
-                    className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:opacity-50"
-                  >
-                    📋 Add Tasks to Task List ({pendingTaskCreation.tasks.length} tasks)
-                  </button>
-                </div>
-              )}
+              {(() => {
+                const shouldShowButton = message.role === 'assistant' && 
+                 pendingTaskCreation && 
+                 pendingTaskCreation.messageId === message.id
+                console.log('Button rendering check:', { 
+                  messageRole: message.role, 
+                  messageId: message.id, 
+                  pendingTaskCreation: !!pendingTaskCreation,
+                  pendingMessageId: pendingTaskCreation?.messageId,
+                  shouldShowButton 
+                })
+                return shouldShowButton && (
+                  <div className="mt-2 pt-2 border-t border-gray-200">
+                    <button
+                      onClick={createTasksFromPending}
+                      disabled={isLoading}
+                      className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:opacity-50"
+                    >
+                      📋 Add Tasks to Task List ({pendingTaskCreation.tasks.length} tasks)
+                    </button>
+                  </div>
+                )
+              })()}
             </div>
           </div>
         ))}

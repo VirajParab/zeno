@@ -338,8 +338,7 @@ Respond with JSON:
    * Generate structured JSON response for task creation
    */
   async generateStructuredResponse(userMessage: string): Promise<{ message: string; user_messages?: string[]; tasks?: any[]; canCreateTask?: boolean; structuredTaskDetails?: any }> {
-    const prompt = `
-You are Zeno, an AI assistant that helps users brainstorm and clarify their tasks through conversation. Your goal is to understand the user's intent completely before creating any tasks.
+    const prompt = `You are Zeno, an AI assistant that helps users brainstorm and clarify their tasks through conversation.
 
 User Message: "${userMessage}"
 
@@ -349,7 +348,8 @@ Your role is to:
 3. Help break down complex goals into actionable steps
 4. Only confirm task creation when you have ALL necessary details
 
-Respond with this EXACT JSON format:
+CRITICAL: Respond with ONLY the JSON object below. Do not include any other text, explanations, or conversation context.
+
 {
   "did_we_get_all_Details_to_craete_task": "yes/no",
   "user_message_response": "Your conversational response here - either brainstorming questions, clarifications, or confirmation that you'll create the task",
@@ -377,11 +377,12 @@ Guidelines:
 - estimatedDuration: time in minutes (60 = 1 hour, 120 = 2 hours)
 - priority: 1=High, 2=Medium, 3=Low
 - category: "work", "health", "learning", "finance", "personal"
-- Respond ONLY with valid JSON, nothing else
-`
+
+RESPOND WITH ONLY THE JSON OBJECT. NO OTHER TEXT.`
 
     try {
-      const response = await this.aiService.chatWithAI(
+      // Call AI service WITHOUT storing messages - we'll handle storage separately
+      const response = await this.aiService.chatWithAIWithoutStorage(
         prompt,
         {
           provider: 'gemini',
@@ -393,21 +394,41 @@ Guidelines:
       )
 
       console.log('AI Response:', response.content)
+      console.log('AI Response type:', typeof response.content)
       
       // Try to parse JSON response
       try {
-        const parsed = JSON.parse(response.content)
+        // First, try to clean the response by removing any text before/after JSON
+        let cleanedResponse = response.content.trim()
+        
+        // Remove any text before the first {
+        const firstBrace = cleanedResponse.indexOf('{')
+        if (firstBrace > 0) {
+          cleanedResponse = cleanedResponse.substring(firstBrace)
+        }
+        
+        // Remove any text after the last }
+        const lastBrace = cleanedResponse.lastIndexOf('}')
+        if (lastBrace > 0 && lastBrace < cleanedResponse.length - 1) {
+          cleanedResponse = cleanedResponse.substring(0, lastBrace + 1)
+        }
+        
+        console.log('Cleaned response:', cleanedResponse)
+        
+        const parsed = JSON.parse(cleanedResponse)
         console.log('Parsed JSON:', parsed)
         
         if (parsed.did_we_get_all_Details_to_craete_task && parsed.user_message_response) {
           console.log('Found valid AI response:', parsed)
-          return {
+          const result = {
             message: parsed.user_message_response,
             user_messages: [userMessage], // Include user message
             tasks: parsed.did_we_get_all_Details_to_craete_task === 'yes' ? [parsed.structured_task_details] : [],
             canCreateTask: parsed.did_we_get_all_Details_to_craete_task === 'yes',
             structuredTaskDetails: parsed.structured_task_details
           }
+          console.log('Returning result:', result)
+          return result
         }
       } catch (parseError) {
         console.error('JSON parsing failed:', parseError)
